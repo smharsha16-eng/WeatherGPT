@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from chatbot import parse_message
-from mock_api import get_alerts, get_weather
+from weather_api import get_alerts, get_weather
 from response_formatter import (
     create_farming_advisory,
     create_travel_advisory,

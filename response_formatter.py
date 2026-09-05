@@ -1,14 +1,53 @@
+from datetime import datetime
 def choose_forecast_day(weather: dict, time_period: str) -> dict:
     daily = weather.get("daily", [])
 
     if not daily:
         return {}
 
-    if time_period == "tomorrow" and len(daily) > 1:
-        return daily[1]
+    # Tomorrow
+    if time_period == "tomorrow":
+        if len(daily) > 1:
+            return daily[1]
+        return daily[0]
 
+    # Today
+    if time_period == "today":
+        return daily[0]
+
+    # Day of the week
+    weekdays = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]
+
+    if time_period in weekdays:
+        for forecast in daily:
+            try:
+                date_obj = datetime.strptime(
+                    forecast["date"],
+                    "%Y-%m-%d"
+                )
+
+                if date_obj.strftime("%A").lower() == time_period:
+                    return forecast
+
+            except (ValueError, KeyError):
+                continue
+
+    # Next week
+    if time_period == "next_week":
+        if len(daily) >= 5:
+            return daily[-1]
+        return daily[-1]
+
+    # Default
     return daily[0]
-
 
 def create_farming_advisory(
     weather: dict,
