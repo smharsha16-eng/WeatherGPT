@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
+import AuthPage from "./components/AuthPage";
+import OutfitPlanner from "./components/OutfitPlanner";
 
 const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8000" : "");
 
@@ -214,7 +216,32 @@ export default function App() {
   const [selectedNwpModel, setSelectedNwpModel] = useState("weatherapi");
   const [selectedSector, setSelectedSector] = useState("agriculture");
   const [language, setLanguage] = useState("English");
+  const t = TRANSLATIONS[language] || TRANSLATIONS.English;
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Authentication State (Mandatory Email ID & Google)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("weathergpt_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+    localStorage.removeItem("weathergpt_token");
+    localStorage.removeItem("weathergpt_user");
+    setCurrentUser(null);
+    setUserMenuOpen(false);
+  };
 
   // Chat conversation state
   const [chatInput, setChatInput] = useState("");
@@ -222,13 +249,12 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([
     {
       role: "assistant",
-      text: "👋 **Hello! I am WeatherGPT**, your conversational AI weather intelligence platform.\n\nAsk me anything in your language about:\n• Real-time weather & 7-day outlooks\n• Farming & pesticide spraying advisories\n• Severe cyclone, flood & heatwave alerts\n• Aviation METAR/TAF briefings & Marine sea states",
+      text: "👋 **Hello! I am WeatherGPT**, your conversational AI weather intelligence platform.\n\nAsk me anything in your language about:\n• Real-time weather & 7-day outlooks\n• Personalized outfit & clothing recommendations\n• Farming & pesticide spraying advisories\n• Severe cyclone, flood & heatwave alerts",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
 
   const messagesEndRef = useRef(null);
-  const t = TRANSLATIONS[language] || TRANSLATIONS.English;
 
   // Load all weather intelligence data for current city
   const fetchAllData = async (targetCity = city) => {
@@ -316,9 +342,19 @@ export default function App() {
     setSearchInput("");
   };
 
-  // Chat message submission
-  const handleSendChat = async (userMsgText = chatInput) => {
+  // Chat message submission (text vs voice distinction)
+  const handleSendChat = async (userMsgText = chatInput, isVoice = false) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
     if (!userMsgText.trim() || chatLoading) return;
+
+    // When typed in chat, cancel any voice speech so responses remain strictly text-only
+    if (!isVoice && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
 
     const userText = userMsgText.trim();
     setChatInput("");
@@ -328,6 +364,7 @@ export default function App() {
         role: "user",
         text: userText,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        isVoice: isVoice,
       },
     ];
     setChatMessages(newHistory);
@@ -354,8 +391,14 @@ export default function App() {
           text: botReply,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           source: data.data_source,
+          isVoiceReply: isVoice,
         },
       ]);
+
+      // Automatic Conversation Mode: ONLY speak out loud when asked through microphone!
+      if (isVoice) {
+        speakText(botReply);
+      }
 
       // If location changed in query, sync it
       if (data.location && data.location.toLowerCase() !== city.toLowerCase()) {
@@ -385,6 +428,12 @@ export default function App() {
       return;
     }
 
+    // Cancel any previous speech playback
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+
     const recognition = new SpeechRecognition();
     recognition.lang = LANG_CODE_MAP[language] || "en-IN";
     recognition.interimResults = false;
@@ -395,15 +444,16 @@ export default function App() {
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      setChatInput(transcript);
       setIsListening(false);
-      // If on chat page, auto-send or let user review
-      if (activePage === "chat") {
-        handleSendChat(transcript);
-      }
+      setChatInput("");
+      // Transition immediately to chat page so the user sees conversational UI
+      setActivePage("chat");
+      // Trigger chat submission with isVoice = true for automatic conversational voice readout!
+      handleSendChat(transcript, true);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (err) => {
+      console.warn("Speech recognition error:", err);
       setIsListening(false);
     };
 
@@ -414,24 +464,47 @@ export default function App() {
     recognition.start();
   };
 
-  // Text-To-Speech audio readout for rural accessibility
+  // Text-To-Speech audio readout for Voice Conversation Mode
   const speakText = (text) => {
     if (!("speechSynthesis" in window)) {
       alert("Text-to-speech is not supported in this browser.");
       return;
     }
     window.speechSynthesis.cancel();
-    // Strip markdown symbols for natural speech
-    const cleanSpeech = text.replace(/[*#_`•]/g, "").replace(/\n+/g, ". ");
+
+    // Strip markdown formatting, symbols, and emojis for natural, fluent spoken voice
+    const cleanSpeech = text
+      .replace(/[\u{1F600}-\u{1F6FF}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+      .replace(/[*#_`•👉✓]/g, " ")
+      .replace(/°C/g, " degrees celsius ")
+      .replace(/km\/h/g, " kilometers per hour ")
+      .replace(/\n+/g, ". ")
+      .replace(/\s+/g, " ")
+      .trim();
+
     const utterance = new SpeechSynthesisUtterance(cleanSpeech);
     utterance.lang = LANG_CODE_MAP[language] || "en-IN";
-    utterance.rate = 0.95;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
     window.speechSynthesis.speak(utterance);
+  };
+
+  const stopSpeaking = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
   };
 
   const navigation = [
     { id: "dashboard", icon: "⌂", name: t.dashboard },
     { id: "chat", icon: "✦", name: t.chat },
+    { id: "outfit", icon: "👔", name: t.outfit || "Outfit & Style" },
     { id: "forecast", icon: "☁", name: t.forecast },
     { id: "alerts", icon: "⚠", name: t.alerts, count: alertsData.length },
     { id: "sectors", icon: "🌾", name: t.sectors },
@@ -469,7 +542,40 @@ export default function App() {
         </div>
 
         <div className="sidebar-bottom">
-          <div className="system-status">
+          {/* User Account / Sign In Widget */}
+          <div className="sidebar-auth-widget">
+            {currentUser ? (
+              <div className="sidebar-user-card">
+                <div className="sidebar-user-avatar">
+                  {currentUser.avatar ? (
+                    <img src={currentUser.avatar} alt={currentUser.name} />
+                  ) : (
+                    <span>{currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}</span>
+                  )}
+                </div>
+                <div className="sidebar-user-info">
+                  <strong>{currentUser.name || "User"}</strong>
+                  <small>{currentUser.email || "Signed In"}</small>
+                </div>
+                <button
+                  className="sidebar-logout-btn"
+                  onClick={handleLogout}
+                  title="Sign Out"
+                >
+                  🚪
+                </button>
+              </div>
+            ) : (
+              <button
+                className="sidebar-signin-btn"
+                onClick={() => setShowAuthModal(true)}
+              >
+                <span>🔑</span> Sign In / Register
+              </button>
+            )}
+          </div>
+
+          <div className="system-status" style={{ marginTop: "12px" }}>
             <span className="status-dot"></span>
             <div>
               <strong>Weather System</strong>
@@ -495,7 +601,10 @@ export default function App() {
               WEATHER INTELLIGENCE / {activePage.toUpperCase()}
             </p>
             <h1>
-              {t.greeting} 👋 <span style={{ fontSize: "16px", color: "var(--muted)", fontWeight: "normal" }}>({weather?.city || city})</span>
+              {t.greeting}{currentUser ? `, ${currentUser.name?.split(" ")[0]}` : ""} 👋{" "}
+              <span style={{ fontSize: "16px", color: "var(--muted)", fontWeight: "normal" }}>
+                ({weather?.city || city})
+              </span>
             </h1>
           </div>
 
@@ -517,6 +626,7 @@ export default function App() {
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               className="lang-select"
+              title="Change platform language"
             >
               <option value="English">English</option>
               <option value="हिन्दी">हिन्दी (Hindi)</option>
@@ -536,9 +646,62 @@ export default function App() {
               {alertsData.length > 0 && <span></span>}
             </button>
 
-            <div className="profile" title="WeatherGPT Active Session">
-              AI
-            </div>
+            {/* Topbar User Profile & Authentication Trigger */}
+            {currentUser ? (
+              <div className="user-profile-menu-container">
+                <div
+                  className="user-profile-badge"
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  title={`Signed in as ${currentUser.name}`}
+                >
+                  <div className="avatar-mini">
+                    {currentUser.avatar ? (
+                      <img src={currentUser.avatar} alt={currentUser.name} />
+                    ) : (
+                      <span>{currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}</span>
+                    )}
+                  </div>
+                  <span className="user-display-name">{currentUser.name?.split(" ")[0]}</span>
+                  <span className="menu-caret">▾</span>
+                </div>
+
+                {userMenuOpen && (
+                  <div className="user-dropdown-popover">
+                    <div className="popover-header">
+                      <strong>{currentUser.name}</strong>
+                      <small>{currentUser.email}</small>
+                      <span className="user-auth-badge">
+                        {currentUser.auth_provider === "google" ? "Google" : "Email Verified"}
+                      </span>
+                    </div>
+                    <div className="popover-divider"></div>
+                    <button
+                      className="popover-item"
+                      onClick={() => {
+                        setActivePage("outfit");
+                        setUserMenuOpen(false);
+                      }}
+                    >
+                      👔 Outfit & Suggestions
+                    </button>
+                    <button
+                      className="popover-item logout"
+                      onClick={handleLogout}
+                    >
+                      🚪 Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                className="topbar-signin-btn"
+                onClick={() => setShowAuthModal(true)}
+                title="Sign in with Email ID or Google"
+              >
+                <span>🔑</span> Sign In
+              </button>
+            )}
           </div>
         </header>
 
@@ -566,42 +729,92 @@ export default function App() {
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
+                      if (!currentUser) {
+                        setShowAuthModal(true);
+                        return;
+                      }
                       setActivePage("chat");
                       handleSendChat(chatInput);
                     }
                   }}
-                  placeholder={isListening ? t.listening : t.askPlaceholder}
+                  placeholder={
+                    isListening
+                      ? t.listening
+                      : !currentUser
+                      ? "🔒 Sign in with Mobile OTP or Google to ask WeatherGPT anything..."
+                      : t.askPlaceholder
+                  }
                 />
                 <button
-                  className={isListening ? "mic mic-active" : "mic"}
-                  onClick={handleVoiceInput}
-                  title="Voice input (Web Speech API)"
+                  type="button"
+                  className={`mic mic-highlighted ${isListening ? "mic-active" : ""}`}
+                  onClick={() => {
+                    if (!currentUser) {
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    handleVoiceInput();
+                  }}
+                  title="🎙️ Ask with AI Voice (Voice Conversation Mode)"
                 >
-                  🎙
+                  <span className="mic-icon">🎙️</span>
+                  <span className="mic-badge-label">AI Voice</span>
+                  {isListening && <span className="mic-pulse-aura"></span>}
                 </button>
                 <button
                   className="ask-button"
                   onClick={() => {
+                    if (!currentUser) {
+                      setShowAuthModal(true);
+                      return;
+                    }
                     setActivePage("chat");
-                    handleSendChat(chatInput);
+                    handleSendChat(chatInput, false);
                   }}
                 >
-                  {t.askBtn}
+                  {currentUser ? t.askBtn : "🔑 Sign In to Ask"}
                 </button>
               </div>
 
               <div className="suggestions">
-                <button onClick={() => { setActivePage("chat"); handleSendChat(`Will it rain tomorrow in ${city}?`); }}>
+                <button onClick={() => setActivePage("outfit")}>
+                  👔 What should I wear? (Outfit Guide)
+                </button>
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    setActivePage("chat");
+                    handleSendChat(`What should I wear tomorrow in ${city}?`);
+                  }}
+                >
+                  ✨ Outfit for tomorrow
+                </button>
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    setActivePage("chat");
+                    handleSendChat(`Will it rain tomorrow in ${city}?`);
+                  }}
+                >
                   🌧 Will it rain tomorrow?
                 </button>
-                <button onClick={() => { setActivePage("chat"); handleSendChat(`Can I spray pesticides in ${city} tomorrow?`); }}>
-                  🌾 Farming & pesticide spray advice
-                </button>
-                <button onClick={() => { setActivePage("alerts"); }}>
-                  ⚠ Active weather warnings
-                </button>
-                <button onClick={() => { setActivePage("forecast"); }}>
-                  ☁ 7-day NWP forecast
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    setActivePage("chat");
+                    handleSendChat(`Can I spray pesticides in ${city} tomorrow?`);
+                  }}
+                >
+                  🌾 Farming & spray advice
                 </button>
               </div>
             </section>
@@ -919,6 +1132,25 @@ export default function App() {
                 </div>
               </div>
               <div className="chat-header-actions">
+                {/* Direct Language Switcher Inside Chat Header */}
+                <div className="chat-lang-switcher">
+                  <span>🌐 Language:</span>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="chat-lang-select"
+                    title="Change language directly in chat"
+                  >
+                    <option value="English">English</option>
+                    <option value="हिन्दी">हिन्दी (Hindi)</option>
+                    <option value="ಕನ್ನಡ">ಕನ್ನಡ (Kannada)</option>
+                    <option value="தமிழ்">தமிழ் (Tamil)</option>
+                    <option value="తెలుగు">తెలుగు (Telugu)</option>
+                    <option value="मराठी">मराठी (Marathi)</option>
+                    <option value="বাংলা">বাংলা (Bengali)</option>
+                  </select>
+                </div>
+
                 <button
                   className="outline-button"
                   onClick={() => setChatMessages([chatMessages[0]])}
@@ -940,7 +1172,10 @@ export default function App() {
                   <div className={`chat-bubble ${msg.role}`}>
                     <div className="bubble-header">
                       <strong>{msg.role === "user" ? "You" : "WeatherGPT AI"}</strong>
-                      <span>{msg.time}</span>
+                      <div className="bubble-header-meta">
+                        {msg.isVoice && <span className="voice-tag">🎙️ Spoken</span>}
+                        <span>{msg.time}</span>
+                      </div>
                     </div>
                     <div className="bubble-content" style={{ whiteSpace: "pre-line" }}>
                       {msg.text}
@@ -950,10 +1185,11 @@ export default function App() {
                         <button
                           className="tts-btn"
                           onClick={() => speakText(msg.text)}
-                          title="Listen to this advisory (Voice Accessibility)"
+                          title="Listen to this advisory"
                         >
                           🔊 Listen
                         </button>
+                        {msg.isVoiceReply && <span className="voice-tag">🎙️ Spoken Response</span>}
                         {msg.source && <small className="source-tag">Source: {msg.source}</small>}
                       </div>
                     )}
@@ -975,44 +1211,91 @@ export default function App() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="chat-input-card card">
-              <div className="chat-suggestions-row">
-                <button onClick={() => handleSendChat(`Can I spray pesticides in ${city} tomorrow?`)}>
-                  🌾 Spray Pesticides Tomorrow?
-                </button>
-                <button onClick={() => handleSendChat(`Will it rain this week in ${city}?`)}>
-                  🌧 Rain forecast this week
-                </button>
-                <button onClick={() => handleSendChat(`Are there any active cyclone or flood warnings for ${city}?`)}>
-                  ⚠ Cyclone & Flood alerts
-                </button>
-                <button onClick={() => handleSendChat(`Give me an aviation weather briefing for ${aviationAirport}`)}>
-                  ✈ Aviation METAR briefing
-                </button>
+            {!currentUser ? (
+              <div className="card chat-auth-gate">
+                <div className="auth-gate-icon">🔒</div>
+                <h3>Sign In Required to Ask WeatherGPT</h3>
+                <p>
+                  You must be logged in to chat or ask questions. Please sign in or register with your <strong>Mobile Number (OTP)</strong> or <strong>Google Account</strong> to get permitted to chat and receive personalized weather & outfit suggestions.
+                </p>
+                <div className="auth-gate-buttons">
+                  <button
+                    className="auth-gate-primary-btn"
+                    onClick={() => setShowAuthModal(true)}
+                  >
+                    🔑 Sign In with Phone OTP or Google →
+                  </button>
+                </div>
+                <div className="auth-gate-features">
+                  <span>✓ 10-Second Phone OTP Login</span>
+                  <span>✓ Instant Google Sign-In</span>
+                  <span>✓ Free & Instant Access</span>
+                </div>
               </div>
+            ) : (
+              <div className="chat-input-card card">
+                {/* Real-time Voice Speaking Indicator */}
+                {isSpeaking && (
+                  <div className="ai-voice-speaking-indicator">
+                    <div className="audio-wave-anim">
+                      <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <span>🎙️ <strong>WeatherGPT AI Voice is speaking out loud...</strong></span>
+                    <button type="button" onClick={stopSpeaking} className="stop-voice-btn" title="Stop Voice">
+                      ⏹ Stop Voice
+                    </button>
+                  </div>
+                )}
 
-              <div className="query-box" style={{ marginTop: "12px" }}>
-                <span>✦</span>
-                <input
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendChat();
-                  }}
-                  placeholder={isListening ? t.listening : `Ask anything in ${language}...`}
-                />
-                <button
-                  className={isListening ? "mic mic-active" : "mic"}
-                  onClick={handleVoiceInput}
-                  title="Voice Input (STT)"
-                >
-                  🎙
-                </button>
-                <button className="ask-button" onClick={() => handleSendChat()}>
-                  {t.askBtn}
-                </button>
+                {/* Real-time Voice Listening Indicator */}
+                {isListening && (
+                  <div className="ai-voice-listening-indicator">
+                    <span className="listening-pulse-dot"></span>
+                    <span>🎙️ <strong>Listening to your voice...</strong> Speak your question now</span>
+                  </div>
+                )}
+
+                <div className="chat-suggestions-row">
+                  <button onClick={() => handleSendChat(`What should I wear tomorrow in ${city}?`, false)}>
+                    👔 What should I wear tomorrow?
+                  </button>
+                  <button onClick={() => handleSendChat(`Will I need an umbrella tomorrow in ${city}?`, false)}>
+                    ☂️ Need an umbrella tomorrow?
+                  </button>
+                  <button onClick={() => handleSendChat(`What is the weather in ${city}?`, false)}>
+                    🌡️ {city} weather summary
+                  </button>
+                  <button onClick={() => handleSendChat(`Can I spray pesticides in ${city} tomorrow?`, false)}>
+                    🌾 Pesticide spray advice
+                  </button>
+                </div>
+
+                <div className="query-box" style={{ marginTop: "12px" }}>
+                  <span>✦</span>
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSendChat(chatInput, false);
+                    }}
+                    placeholder={isListening ? t.listening : `Ask anything in ${language} (type text or click highlighted AI Voice)...`}
+                  />
+                  <button
+                    type="button"
+                    className={`mic mic-highlighted ${isListening ? "mic-active" : ""}`}
+                    onClick={handleVoiceInput}
+                    title="🎙️ Ask with AI Voice (Voice Conversation Mode)"
+                  >
+                    <span className="mic-icon">🎙️</span>
+                    <span className="mic-badge-label">AI Voice</span>
+                    {isListening && <span className="mic-pulse-aura"></span>}
+                  </button>
+                  <button className="ask-button" onClick={() => handleSendChat(chatInput, false)}>
+                    {t.askBtn}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </section>
         )}
 
@@ -1370,6 +1653,45 @@ export default function App() {
               </ul>
             </div>
           </section>
+        )}
+
+        {/* ==================================================== */}
+        {/* VIEW 7: PERSONALIZED OUTFIT & SUGGESTIONS */}
+        {/* ==================================================== */}
+        {activePage === "outfit" && (
+          <OutfitPlanner
+            city={weather?.city || city}
+            onAskInChat={(msg) => {
+              setActivePage("chat");
+              handleSendChat(msg);
+            }}
+          />
+        )}
+
+        {/* ==================================================== */}
+        {/* VIEW 8: ACCOUNT & AUTHENTICATION (STANDALONE) */}
+        {/* ==================================================== */}
+        {activePage === "auth" && (
+          <AuthPage
+            onLoginSuccess={(u) => {
+              setCurrentUser(u);
+              setActivePage("dashboard");
+            }}
+            onClose={() => setActivePage("dashboard")}
+            isModal={false}
+          />
+        )}
+
+        {/* AUTHENTICATION MODAL OVERLAY */}
+        {showAuthModal && (
+          <AuthPage
+            onLoginSuccess={(u) => {
+              setCurrentUser(u);
+              setShowAuthModal(false);
+            }}
+            onClose={() => setShowAuthModal(false)}
+            isModal={true}
+          />
         )}
 
         {/* FOOTER */}
