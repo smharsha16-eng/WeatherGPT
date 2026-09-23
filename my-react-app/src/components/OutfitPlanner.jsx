@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { getTranslation } from "../utils/translations";
 
 const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8000" : "");
 
-export default function OutfitPlanner({ city, onAskInChat }) {
+export default function OutfitPlanner({ city, onAskInChat, language = "English" }) {
+  const t = getTranslation(language);
   const [dayType, setDayType] = useState("tomorrow"); // "today" or "tomorrow"
   const [recommendations, setRecommendations] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -35,10 +37,10 @@ export default function OutfitPlanner({ city, onAskInChat }) {
       {/* Header card with Day Toggle */}
       <div className="card outfit-header-card">
         <div className="outfit-header-left">
-          <span className="eyebrow">PERSONALIZED SUGGESTIONS & LIFESTYLE</span>
-          <h2>What Should You Wear in {city}?</h2>
+          <span className="eyebrow">{t.outfit || "PERSONALIZED SUGGESTIONS & LIFESTYLE"}</span>
+          <h2>{t.whatShouldWear || "What Should You Wear in"} {city}?</h2>
           <p>
-            Context-aware outfit styling, essential accessories checklist, and outdoor activity advisories.
+            {t.outfitSubtitle || "Context-aware outfit styling, essential accessories checklist, and outdoor activity advisories."}
           </p>
         </div>
 
@@ -47,13 +49,13 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             className={`day-toggle-btn ${dayType === "today" ? "active" : ""}`}
             onClick={() => setDayType("today")}
           >
-            📅 Today
+            📅 {t.today || "Today"}
           </button>
           <button
             className={`day-toggle-btn ${dayType === "tomorrow" ? "active" : ""}`}
             onClick={() => setDayType("tomorrow")}
           >
-            ☀️ Tomorrow
+            ☀️ {t.tomorrow || "Tomorrow"}
           </button>
         </div>
       </div>
@@ -64,7 +66,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <span></span><span></span><span></span>
           </div>
           <p style={{ marginTop: "12px", color: "var(--muted)" }}>
-            Analyzing meteorological models & computing personalized outfit...
+            {t.analyzingOutfit || "Analyzing meteorological models & computing personalized outfit..."}
           </p>
         </div>
       ) : recommendations ? (
@@ -76,7 +78,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
               <div className="banner-meta-row">
                 <span className="banner-tag">{recommendations.day_label}</span>
                 <span className="banner-condition">
-                  🌡️ {w?.temp_min}°C – {w?.temp_max}°C • {w?.condition} • 💧 Rain {w?.rain_chance}%
+                  🌡️ {w?.temp_min}°C – {w?.temp_max}°C • {w?.condition} • 💧 {t.rainProbability || "Rain"} {w?.rain_chance}%
                 </span>
                 <span className="banner-feel">{w?.thermal_feel}</span>
               </div>
@@ -90,7 +92,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card clothing-card">
               <div className="clothing-card-header">
                 <span className="clothing-icon">👕</span>
-                <h4>Recommended Tops</h4>
+                <h4>{t.recommendedTops || "Recommended Tops"}</h4>
               </div>
               <ul className="clothing-list">
                 {outfit?.tops?.map((item, idx) => (
@@ -103,7 +105,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card clothing-card">
               <div className="clothing-card-header">
                 <span className="clothing-icon">👖</span>
-                <h4>Recommended Bottoms</h4>
+                <h4>{t.recommendedBottoms || "Recommended Bottoms"}</h4>
               </div>
               <ul className="clothing-list">
                 {outfit?.bottoms?.map((item, idx) => (
@@ -116,7 +118,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card clothing-card">
               <div className="clothing-card-header">
                 <span className="clothing-icon">🧥</span>
-                <h4>Outerwear & Layers</h4>
+                <h4>{t.outerwearLayers || "Outerwear & Layers"}</h4>
               </div>
               <ul className="clothing-list">
                 {outfit?.outerwear?.map((item, idx) => (
@@ -129,7 +131,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card clothing-card">
               <div className="clothing-card-header">
                 <span className="clothing-icon">👟</span>
-                <h4>Footwear Suggestion</h4>
+                <h4>{t.footwearSuggestion || "Footwear Suggestion"}</h4>
               </div>
               <ul className="clothing-list">
                 {outfit?.footwear?.map((item, idx) => (
@@ -145,8 +147,8 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card accessories-card">
               <div className="card-header">
                 <div>
-                  <span className="eyebrow">BEFORE YOU STEP OUT</span>
-                  <h3>Essential Accessories Checklist</h3>
+                  <span className="eyebrow">{t.beforeYouStepOut || "BEFORE YOU STEP OUT"}</span>
+                  <h3>{t.essentialAccessories || "Essential Accessories Checklist"}</h3>
                 </div>
               </div>
 
@@ -172,8 +174,8 @@ export default function OutfitPlanner({ city, onAskInChat }) {
             <div className="card activities-card">
               <div className="card-header">
                 <div>
-                  <span className="eyebrow">OUTDOOR FEASIBILITY</span>
-                  <h3>Daily Activity Outlook</h3>
+                  <span className="eyebrow">{t.outdoorFeasibility || "OUTDOOR FEASIBILITY"}</span>
+                  <h3>{t.dailyActivityOutlook || "Daily Activity Outlook"}</h3>
                 </div>
               </div>
 
@@ -182,7 +184,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
                 <div className="activity-row">
                   <div className="activity-badge-col">
                     <span className="act-icon">🏃</span>
-                    <strong>Running / Exercise</strong>
+                    <strong>{t.runningExercise || "Running / Exercise"}</strong>
                   </div>
                   <div className="activity-info">
                     <span className="activity-status-pill">{act?.running?.status}</span>
@@ -194,7 +196,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
                 <div className="activity-row">
                   <div className="activity-badge-col">
                     <span className="act-icon">🧺</span>
-                    <strong>Laundry Drying</strong>
+                    <strong>{t.laundryDrying || "Laundry Drying"}</strong>
                   </div>
                   <div className="activity-info">
                     <span className="activity-status-pill">{act?.laundry?.status}</span>
@@ -206,7 +208,7 @@ export default function OutfitPlanner({ city, onAskInChat }) {
                 <div className="activity-row">
                   <div className="activity-badge-col">
                     <span className="act-icon">🚗</span>
-                    <strong>Transit & Commute</strong>
+                    <strong>{t.transitCommute || "Transit & Commute"}</strong>
                   </div>
                   <div className="activity-info">
                     <span className="activity-status-pill">{act?.commute?.status}</span>
@@ -217,28 +219,28 @@ export default function OutfitPlanner({ city, onAskInChat }) {
 
               {/* QUICK CHAT ACTIONS */}
               <div className="outfit-quick-prompts">
-                <span className="quick-prompt-label">💬 Ask WeatherGPT AI:</span>
+                <span className="quick-prompt-label">💬 {t.askWeatherGptAi || "Ask WeatherGPT AI:"}</span>
                 <div className="quick-chips-row">
                   <button
                     onClick={() =>
                       onAskInChat(`What should I wear ${dayType} in ${city}?`)
                     }
                   >
-                    👔 What to wear {dayType}?
+                    👔 {t.whatToWearPrompt || "What to wear"} {dayType === "today" ? (t.today || "today") : (t.tomorrow || "tomorrow")}?
                   </button>
                   <button
                     onClick={() =>
                       onAskInChat(`Will I need an umbrella ${dayType} in ${city}?`)
                     }
                   >
-                    ☂️ Need an umbrella?
+                    ☂️ {t.umbrellaPrompt || "Need an umbrella?"}
                   </button>
                   <button
                     onClick={() =>
                       onAskInChat(`Is it good for jogging ${dayType} morning in ${city}?`)
                     }
                   >
-                    🏃 Good for jogging?
+                    🏃 {t.joggingPrompt || "Good for jogging?"}
                   </button>
                 </div>
               </div>

@@ -1,6 +1,27 @@
-__pycache__/
-*.pyc
+# Environment variables & API keys (Never commit secrets!)
 .env
-.venv/
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 venv/
+env/
+.venv/
+
+# Node.js
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+my-react-app/dist/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

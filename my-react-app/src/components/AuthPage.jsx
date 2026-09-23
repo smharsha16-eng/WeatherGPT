@@ -12,11 +12,10 @@ const COUNTRY_CODES = [
   { code: "+49", country: "Germany", flag: "🇩🇪" },
 ];
 
-export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
-  // Method selection: "phone" (Mobile Number OTP), "google" (Google Sign-In), or "email" (Email ID)
-  const [authMethod, setAuthMethod] = useState("phone");
+export default function AuthPage({ onLoginSuccess, onClose, isModal = false, theme = "default", onThemeChange }) {
+  // Method selection: "phone" (Mobile Number Direct), "google" (Google Sign-In), or "email" (Email OTP)
+  const [authMethod, setAuthMethod] = useState("email");
   const [authMode, setAuthMode] = useState("login"); // "login" or "register"
-  const [emailAuthType, setEmailAuthType] = useState("code"); // "code" or "password"
 
   // Phone Form fields
   const [countryCode, setCountryCode] = useState("+91");
@@ -25,13 +24,13 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
 
   // Email Form fields
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
-  // OTP / Code step
-  const [step, setStep] = useState("input"); // "input" or "otp"
+  // OTP / Code step for Email
+  const [step, setStep] = useState("input"); // "input" (Email Entry) or "otp" (OTP Validation)
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [resendTimer, setResendTimer] = useState(30);
-  const [demoCodeHint, setDemoCodeHint] = useState("");
+  const [expirySeconds, setExpirySeconds] = useState(300); // 5-minute expiry (300 seconds)
+  const [attempts, setAttempts] = useState(0);
 
   // Status feedback
   const [loading, setLoading] = useState(false);
@@ -40,7 +39,32 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
 
   const otpInputsRef = useRef([]);
 
-  // Countdown timer for OTP resend
+  // Time formatter: MM:SS
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // Live 5-minute countdown clock for OTP validity
+  useEffect(() => {
+    let interval = null;
+    if (step === "otp" && expirySeconds > 0) {
+      interval = setInterval(() => {
+        setExpirySeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setErrorMsg("⏰ Verification code has expired (5-minute window). Please click 'Resend OTP Code'.");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, expirySeconds]);
+
+  // Cooldown countdown timer for OTP resend (30s cooldown)
   useEffect(() => {
     let interval = null;
     if (step === "otp" && resendTimer > 0) {
@@ -52,9 +76,9 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
   }, [step, resendTimer]);
 
   // ==========================================
-  // 1. MOBILE PHONE NUMBER OTP HANDLERS
+  // 1. MOBILE PHONE DIRECT LOGIN (As "User")
   // ==========================================
-  const handleSendPhoneOtp = async (e) => {
+  const handleDirectPhoneLogin = async (e) => {
     if (e) e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
@@ -65,123 +89,34 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
       return;
     }
 
-    if (authMode === "register" && !userName.trim()) {
-      setErrorMsg("Please enter your name for registration.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/phone/send-otp`, {
+      const res = await fetch(`${API_BASE}/auth/phone/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: cleanNum,
           country_code: countryCode,
+          name: userName.trim() || "User",
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || "Failed to send SMS OTP.");
-      }
-
-      setStep("otp");
-      setResendTimer(30);
-      setDemoCodeHint(data.demo_otp || "123456");
-      setSuccessMsg(`OTP sent to ${countryCode} ${cleanNum}`);
-      setTimeout(() => {
-        otpInputsRef.current[0]?.focus();
-      }, 150);
-    } catch (err) {
-      setErrorMsg(err.message || "Failed to send OTP. Please check your connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyPhoneOtp = async (otpToVerify = otp.join("")) => {
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    if (otpToVerify.length !== 6) {
-      setErrorMsg("Please enter the complete 6-digit OTP code.");
-      return;
-    }
-
-    const cleanNum = phone.replace(/\D/g, "");
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/auth/phone/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: cleanNum,
-          country_code: countryCode,
-          otp: otpToVerify,
-          name: userName.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || "Invalid or expired OTP.");
+        throw new Error(data.detail || "Failed to sign in with mobile number.");
       }
 
       localStorage.setItem("weathergpt_token", data.token);
       localStorage.setItem("weathergpt_user", JSON.stringify(data.user));
 
-      setSuccessMsg(`Welcome, ${data.user.name}!`);
+      setSuccessMsg(`Welcome, ${data.user.name || "User"}!`);
       setTimeout(() => {
         if (onLoginSuccess) onLoginSuccess(data.user);
-      }, 500);
+      }, 400);
     } catch (err) {
-      setErrorMsg(err.message || "OTP verification failed.");
+      setErrorMsg(err.message || "Failed to sign in with mobile number.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Handle OTP Inputs (Auto-advance & Backspace)
-  const handleOtpChange = (index, value) => {
-    if (isNaN(value)) return;
-    const newOtp = [...otp];
-    newOtp[index] = value.slice(-1);
-    setOtp(newOtp);
-
-    if (value && index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
-    }
-
-    const fullOtp = newOtp.join("");
-    if (fullOtp.length === 6 && !newOtp.includes("")) {
-      if (authMethod === "phone") {
-        handleVerifyPhoneOtp(fullOtp);
-      } else {
-        handleVerifyEmailCode(fullOtp);
-      }
-    }
-  };
-
-  const handleOtpKeyDown = (index, e) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      otpInputsRef.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!pasted) return;
-    const newOtp = pasted.split("");
-    while (newOtp.length < 6) newOtp.push("");
-    setOtp(newOtp);
-    if (pasted.length === 6) {
-      if (authMethod === "phone") {
-        handleVerifyPhoneOtp(pasted);
-      } else {
-        handleVerifyEmailCode(pasted);
-      }
     }
   };
 
@@ -218,7 +153,7 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
       setSuccessMsg(`Signed in with Google as ${data.user.name}`);
       setTimeout(() => {
         if (onLoginSuccess) onLoginSuccess(data.user);
-      }, 500);
+      }, 400);
     } catch (err) {
       setErrorMsg(err.message || "Google sign-in could not be completed.");
     } finally {
@@ -227,14 +162,15 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
   };
 
   // ==========================================
-  // 3. EMAIL ID HANDLERS
+  // 3. EMAIL ID OTP HANDLERS
   // ==========================================
   const handleSendEmailCode = async (e) => {
     if (e) e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
 
-    if (!email.includes("@") || !email.includes(".")) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes("@") || !cleanEmail.includes(".")) {
       setErrorMsg("Please enter a valid Email ID.");
       return;
     }
@@ -244,7 +180,7 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
       const res = await fetch(`${API_BASE}/auth/email/send-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: cleanEmail }),
       });
 
       const data = await res.json();
@@ -252,8 +188,9 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
 
       setStep("otp");
       setResendTimer(30);
-      setDemoCodeHint(data.demo_code || "123456");
-      setSuccessMsg(`Verification code sent to ${data.email}`);
+      setExpirySeconds(300); // 5-minute countdown clock
+      setAttempts(0);
+      setSuccessMsg(`Verification code sent to ${data.email || cleanEmail} (Valid for 5 minutes)`);
       setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 150);
@@ -268,25 +205,34 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
     setErrorMsg("");
     setSuccessMsg("");
 
+    if (expirySeconds <= 0) {
+      setErrorMsg("⏰ This OTP code has expired. Please request a new verification code.");
+      return;
+    }
+
     if (codeToVerify.length !== 6) {
       setErrorMsg("Please enter the complete 6-digit code.");
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/auth/email/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
+          email: cleanEmail,
           code: codeToVerify,
           name: userName.trim() || undefined,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Invalid code.");
+      if (!res.ok) {
+        setAttempts((prev) => prev + 1);
+        throw new Error(data.detail || "Invalid code.");
+      }
 
       localStorage.setItem("weathergpt_token", data.token);
       localStorage.setItem("weathergpt_user", JSON.stringify(data.user));
@@ -294,53 +240,46 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
       setSuccessMsg(`Welcome, ${data.user.name}!`);
       setTimeout(() => {
         if (onLoginSuccess) onLoginSuccess(data.user);
-      }, 500);
+      }, 400);
     } catch (err) {
-      setErrorMsg(err.message || "Code verification failed.");
+      setErrorMsg(err.message || "Code verification failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePasswordLogin = async (e) => {
-    if (e) e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
+  // Handle OTP Inputs (Auto-advance & Backspace)
+  const handleOtpChange = (index, value) => {
+    if (isNaN(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
 
-    if (!email.includes("@")) {
-      setErrorMsg("Please enter a valid Email ID.");
-      return;
-    }
-    if (!password || password.length < 4) {
-      setErrorMsg("Please enter your password.");
-      return;
+    if (value && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
     }
 
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/auth/email/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password: password,
-        }),
-      });
+    const fullOtp = newOtp.join("");
+    if (fullOtp.length === 6 && !newOtp.includes("")) {
+      handleVerifyEmailCode(fullOtp);
+    }
+  };
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Login failed.");
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
 
-      localStorage.setItem("weathergpt_token", data.token);
-      localStorage.setItem("weathergpt_user", JSON.stringify(data.user));
-
-      setSuccessMsg(`Welcome back, ${data.user.name}!`);
-      setTimeout(() => {
-        if (onLoginSuccess) onLoginSuccess(data.user);
-      }, 500);
-    } catch (err) {
-      setErrorMsg(err.message || "Sign in failed.");
-    } finally {
-      setLoading(false);
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const newOtp = pasted.split("");
+    while (newOtp.length < 6) newOtp.push("");
+    setOtp(newOtp);
+    if (pasted.length === 6) {
+      handleVerifyEmailCode(pasted);
     }
   };
 
@@ -355,14 +294,30 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
             </div>
             <div>
               <h3>WeatherGPT Account</h3>
-              <small>Sign In with Mobile OTP or Google</small>
+              <small>Sign In with Email OTP or Mobile Number</small>
             </div>
           </div>
-          {isModal && (
-            <button className="auth-close-btn" onClick={onClose} title="Close">
-              ✕
-            </button>
-          )}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+            {onThemeChange && (
+              <button
+                type="button"
+                className="sidebar-theme-btn"
+                onClick={() => {
+                  const next = theme === "default" ? "light" : theme === "light" ? "dark" : "default";
+                  onThemeChange(next);
+                }}
+                title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
+                style={{ fontSize: "12px", padding: "5px 9px" }}
+              >
+                {theme === "light" ? "☀️ Light" : theme === "dark" ? "🌙 Dark" : "🌐 Default"}
+              </button>
+            )}
+            {isModal && onClose && (
+              <button className="auth-close-btn" onClick={onClose} title="Close">
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab switch: Sign In vs Register */}
@@ -389,8 +344,18 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
           </button>
         </div>
 
-        {/* Authentication Methods: Phone Number OTP vs Google vs Email */}
+        {/* Authentication Methods: Email ID vs Mobile Number vs Google */}
         <div className="auth-method-pills">
+          <button
+            className={`method-pill ${authMethod === "email" ? "active" : ""}`}
+            onClick={() => {
+              setAuthMethod("email");
+              setErrorMsg("");
+              setStep("input");
+            }}
+          >
+            ✉️ Email ID
+          </button>
           <button
             className={`method-pill ${authMethod === "phone" ? "active" : ""}`}
             onClick={() => {
@@ -429,16 +394,6 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
             </svg>
             Google
           </button>
-          <button
-            className={`method-pill ${authMethod === "email" ? "active" : ""}`}
-            onClick={() => {
-              setAuthMethod("email");
-              setErrorMsg("");
-              setStep("input");
-            }}
-          >
-            ✉️ Email ID
-          </button>
         </div>
 
         {/* Feedback alerts */}
@@ -446,15 +401,20 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
         {successMsg && <div className="auth-alert success">✓ {successMsg}</div>}
 
         {/* ========================================================== */}
-        {/* METHOD 1: MOBILE NUMBER BASED LOGIN (SMS OTP) */}
+        {/* METHOD 1: EMAIL ID OTP (Verification code to mail) */}
         {/* ========================================================== */}
-        {authMethod === "phone" && (
-          <div className="auth-phone-form">
+        {authMethod === "email" && (
+          <div className="auth-email-form">
             {step === "input" ? (
-              <form onSubmit={handleSendPhoneOtp}>
+              <form onSubmit={handleSendEmailCode}>
+                <div style={{ textAlign: "center", marginBottom: "14px" }}>
+                  <div style={{ display: "inline-block", background: "rgba(56, 189, 248, 0.15)", color: "var(--accent, #38bdf8)", padding: "3px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    State 1: Email Entry
+                  </div>
+                </div>
                 {authMode === "register" && (
                   <div className="form-group" style={{ marginBottom: "14px" }}>
-                    <label>Your Name</label>
+                    <label>Full Name</label>
                     <input
                       type="text"
                       className="auth-input"
@@ -467,48 +427,37 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
                 )}
 
                 <div className="form-group">
-                  <label>Mobile Phone Number</label>
-                  <div className="phone-input-row">
-                    <select
-                      className="country-select"
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                    >
-                      {COUNTRY_CODES.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.flag} {c.code}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="tel"
-                      className="auth-input phone-number-input"
-                      placeholder="e.g. 98765 43210"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    className="auth-input"
+                    placeholder="e.g. yourname@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoFocus
+                  />
                 </div>
 
-                <div className="auth-helper-row" style={{ marginTop: "10px" }}>
+                <div className="auth-helper-row" style={{ marginTop: "10px", marginBottom: "16px" }}>
                   <small style={{ color: "var(--muted)" }}>
-                    🔒 We will send a 6-digit OTP verification code to this number.
+                    🔒 We will send a 6-digit OTP verification code to this email.
                   </small>
                 </div>
 
                 <button type="submit" className="auth-submit-btn" disabled={loading}>
-                  {loading ? "Sending OTP..." : "Send Verification OTP →"}
+                  {loading ? "Sending Code..." : "Send Email Verification Code →"}
                 </button>
               </form>
             ) : (
-              /* OTP VERIFICATION STEP */
               <div className="otp-step-box">
                 <div className="otp-prompt">
-                  <strong>Enter 6-Digit SMS OTP</strong>
+                  <div style={{ display: "inline-block", background: "rgba(56, 189, 248, 0.15)", color: "var(--accent, #38bdf8)", padding: "3px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: "700", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    State 2: OTP Validation
+                  </div>
+                  <strong>Enter 6-Digit Email OTP</strong>
                   <p>
-                    Sent to <span>{countryCode} {phone}</span>{" "}
+                    Dispatched to <span>{email}</span>{" "}
                     <button
                       type="button"
                       className="link-btn"
@@ -517,9 +466,32 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
                         setOtp(["", "", "", "", "", ""]);
                       }}
                     >
-                      (Edit Number)
+                      (Change Email)
                     </button>
                   </p>
+                </div>
+
+                {/* 5-minute Live Countdown & Attempt Counter Bar */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: expirySeconds > 60 ? "rgba(56, 189, 248, 0.08)" : "rgba(239, 68, 68, 0.12)",
+                  border: `1px solid ${expirySeconds > 60 ? "rgba(56, 189, 248, 0.25)" : "rgba(239, 68, 68, 0.4)"}`,
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  margin: "12px 0 16px 0",
+                  fontSize: "12px"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>⏰</span>
+                    <strong style={{ color: expirySeconds > 60 ? "var(--accent, #38bdf8)" : "#f87171" }}>
+                      {expirySeconds > 0 ? `Code expires in ${formatTime(expirySeconds)}` : "Expired (5m window)"}
+                    </strong>
+                  </div>
+                  <div style={{ color: attempts >= 4 ? "#f87171" : "var(--muted, #94a3b8)", fontWeight: "600" }}>
+                    🛡️ {attempts} / 5 attempts
+                  </div>
                 </div>
 
                 <div className="otp-boxes-row" onPaste={handleOtpPaste}>
@@ -538,27 +510,14 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
                   ))}
                 </div>
 
-                {/* Instant Clickable Test Code Badge */}
-                <div
-                  className="demo-otp-badge"
-                  onClick={() => {
-                    const demo = demoCodeHint || "123456";
-                    setOtp(demo.split(""));
-                    handleVerifyPhoneOtp(demo);
-                  }}
-                  title="Click to fill test OTP code instantly"
-                >
-                  💡 Click to Auto-Fill Test OTP: <strong>{demoCodeHint || "123456"}</strong>
-                </div>
-
                 <div className="otp-footer-row">
                   {resendTimer > 0 ? (
-                    <small style={{ color: "var(--muted)" }}>Resend code in {resendTimer}s</small>
+                    <small style={{ color: "var(--muted)" }}>Resend code available in {resendTimer}s</small>
                   ) : (
                     <button
                       type="button"
                       className="link-btn"
-                      onClick={handleSendPhoneOtp}
+                      onClick={handleSendEmailCode}
                       disabled={loading}
                     >
                       ↻ Resend OTP Code
@@ -569,10 +528,14 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
                 <button
                   type="button"
                   className="auth-submit-btn"
-                  onClick={() => handleVerifyPhoneOtp()}
-                  disabled={loading}
+                  onClick={() => handleVerifyEmailCode()}
+                  disabled={loading || expirySeconds === 0}
                 >
-                  {loading ? "Verifying..." : "Verify & Sign In ✓"}
+                  {loading
+                    ? "Verifying..."
+                    : expirySeconds === 0
+                    ? "Code Expired (Click Resend)"
+                    : "Verify & Sign In ✓"}
                 </button>
               </div>
             )}
@@ -580,12 +543,57 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
         )}
 
         {/* ========================================================== */}
-        {/* METHOD 2: GOOGLE LOGIN */}
+        {/* METHOD 2: MOBILE NUMBER (Direct login taking name as "User") */}
+        {/* ========================================================== */}
+        {authMethod === "phone" && (
+          <div className="auth-phone-form">
+            <form onSubmit={handleDirectPhoneLogin}>
+              <div className="form-group">
+                <label>Mobile Phone Number</label>
+                <div className="phone-input-row">
+                  <select
+                    className="country-select"
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.code}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    className="auth-input phone-number-input"
+                    placeholder="e.g. 98765 43210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="auth-helper-row" style={{ marginTop: "10px", marginBottom: "16px" }}>
+                <small style={{ color: "var(--muted)" }}>
+                  ⚡ Instant Direct Sign In — Logs in directly taking name as <strong>User</strong>.
+                </small>
+              </div>
+
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
+                {loading ? "Signing in..." : "Sign In with Mobile Number →"}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================== */}
+        {/* METHOD 3: GOOGLE LOGIN */}
         {/* ========================================================== */}
         {authMethod === "google" && (
           <div className="auth-google-box">
             <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "18px", textAlign: "center" }}>
-              Sign in instantly with your verified <strong>Google Account</strong> to get full access to WeatherGPT forecasts, outfit advice, and chat.
+              Sign in instantly with your verified <strong>Google Account</strong>.
             </p>
 
             <div className="form-group" style={{ marginBottom: "16px" }}>
@@ -625,139 +633,6 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false }) {
               </svg>
               <span>{loading ? "Connecting to Google..." : "Continue with Google Account"}</span>
             </button>
-          </div>
-        )}
-
-        {/* ========================================================== */}
-        {/* METHOD 3: EMAIL ID */}
-        {/* ========================================================== */}
-        {authMethod === "email" && (
-          <div className="auth-email-form">
-            {step === "input" ? (
-              <div>
-                <div className="email-sub-toggle">
-                  <button
-                    type="button"
-                    className={`sub-toggle-btn ${emailAuthType === "code" ? "active" : ""}`}
-                    onClick={() => setEmailAuthType("code")}
-                  >
-                    ✉️ One-Time Code (OTP)
-                  </button>
-                  <button
-                    type="button"
-                    className={`sub-toggle-btn ${emailAuthType === "password" ? "active" : ""}`}
-                    onClick={() => setEmailAuthType("password")}
-                  >
-                    🔒 Password
-                  </button>
-                </div>
-
-                <form onSubmit={emailAuthType === "code" ? handleSendEmailCode : handlePasswordLogin}>
-                  {authMode === "register" && (
-                    <div className="form-group" style={{ marginBottom: "14px" }}>
-                      <label>Full Name</label>
-                      <input
-                        type="text"
-                        className="auth-input"
-                        placeholder="e.g. Shushrutha"
-                        value={userName}
-                        onChange={(e) => setUserName(e.target.value)}
-                        required
-                      />
-                    </div>
-                  )}
-
-                  <div className="form-group">
-                    <label>Email ID</label>
-                    <input
-                      type="email"
-                      className="auth-input"
-                      placeholder="e.g. yourname@gmail.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  {emailAuthType === "password" && (
-                    <div className="form-group" style={{ marginTop: "14px" }}>
-                      <label>Password</label>
-                      <input
-                        type="password"
-                        className="auth-input"
-                        placeholder="Enter password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                    </div>
-                  )}
-
-                  <button type="submit" className="auth-submit-btn" disabled={loading}>
-                    {loading
-                      ? "Processing..."
-                      : emailAuthType === "code"
-                      ? "Send Email Verification Code →"
-                      : "Sign In with Email →"}
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="otp-step-box">
-                <div className="otp-prompt">
-                  <strong>Enter 6-Digit Email Code</strong>
-                  <p>
-                    Sent to <span>{email}</span>{" "}
-                    <button
-                      type="button"
-                      className="link-btn"
-                      onClick={() => {
-                        setStep("input");
-                        setOtp(["", "", "", "", "", ""]);
-                      }}
-                    >
-                      (Change)
-                    </button>
-                  </p>
-                </div>
-
-                <div className="otp-boxes-row" onPaste={handleOtpPaste}>
-                  {otp.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      ref={(el) => (otpInputsRef.current[idx] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      className="otp-box"
-                      value={digit}
-                      onChange={(e) => handleOtpChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    />
-                  ))}
-                </div>
-
-                <div
-                  className="demo-otp-badge"
-                  onClick={() => {
-                    const demo = demoCodeHint || "123456";
-                    setOtp(demo.split(""));
-                    handleVerifyEmailCode(demo);
-                  }}
-                >
-                  💡 Click to Auto-Fill Test Code: <strong>{demoCodeHint || "123456"}</strong>
-                </div>
-
-                <button
-                  type="button"
-                  className="auth-submit-btn"
-                  onClick={() => handleVerifyEmailCode()}
-                  disabled={loading}
-                >
-                  {loading ? "Verifying..." : "Verify & Sign In ✓"}
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
