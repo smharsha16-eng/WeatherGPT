@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd my-react-app && npm install && npm run build",
+  "outputDirectory": "my-react-app/dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/auth/(.*)", "destination": "/api/index.py" },
+    { "source": "/weather", "destination": "/api/index.py" },
+    { "source": "/forecast", "destination": "/api/index.py" },
+    { "source": "/nwp-compare", "destination": "/api/index.py" },
+    { "source": "/alerts", "destination": "/api/index.py" },
+    { "source": "/advisories", "destination": "/api/index.py" },
+    { "source": "/recommendations", "destination": "/api/index.py" },
+    { "source": "/aviation", "destination": "/api/index.py" },
+    { "source": "/climate", "destination": "/api/index.py" },
+    { "source": "/chat", "destination": "/api/index.py" },
+    { "source": "/health", "destination": "/api/index.py" },
+    { "source": "/locations/(.*)", "destination": "/api/index.py" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

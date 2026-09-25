@@ -1,0 +1,10 @@
+{
+  "name": "weathergpt-fullstack",
+  "version": "2.0.0",
+  "private": true,
+  "description": "WeatherGPT - AI Meteorological Intelligence & Decision Support Platform",
+  "scripts": {
+    "build": "cd my-react-app && npm install && npm run build",
+    "install:frontend": "cd my-react-app && npm install"
+  }
+}

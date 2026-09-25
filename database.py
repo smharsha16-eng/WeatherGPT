@@ -10,7 +10,11 @@ import uuid
 import json
 from datetime import datetime, timezone
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "weathergpt.db")
+# Support writable storage on Vercel Serverless environment (/tmp) vs local development
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    DB_PATH = os.path.join("/tmp", "weathergpt.db")
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "weathergpt.db")
 
 
 def get_db_connection():
