@@ -25,7 +25,12 @@ from weather_service import (
     get_aviation_briefing,
     get_climate_trends,
     get_coordinates,
+    search_location_suggestions,
 )
+import database
+
+# Initialize SQLite database for chat history and user settings
+database.init_db()
 
 app = FastAPI(
     title="WeatherGPT - AI Meteorological Intelligence Platform",
@@ -59,6 +64,14 @@ class ChatRequest(BaseModel):
         min_length=1,
         examples=["Can I spray pesticides in Nashik tomorrow?"],
     )
+    city: str | None = Field(default="Bengaluru")
+    language: str | None = Field(default="English")
+    session_id: str | None = Field(default=None)
+    is_voice: bool | None = Field(default=False)
+
+
+class CreateSessionRequest(BaseModel):
+    title: str | None = Field(default="New Weather Consultation")
     city: str | None = Field(default="Bengaluru")
     language: str | None = Field(default="English")
 
@@ -113,6 +126,23 @@ def health():
     }
 
 
+@app.get("/locations/suggest")
+def suggest_locations(
+    q: str = Query(default="", description="Search query for city, town, district, taluk, village"),
+    limit: int = Query(default=8, description="Maximum number of suggestions to return"),
+):
+    """
+    Real-time auto-suggestions for places across India & globally:
+    Supports cities, towns, districts, taluks, mandals, villages, and tourist destinations.
+    """
+    try:
+        suggestions = search_location_suggestions(q, limit=limit)
+        return {"query": q, "count": len(suggestions), "suggestions": suggestions}
+    except Exception as e:
+        print(f"Location suggest error: {e}")
+        return {"query": q, "count": 0, "suggestions": []}
+
+
 @app.get("/weather")
 def weather(
     city: str = Query(default="Bengaluru", description="City name to fetch weather for"),
@@ -136,6 +166,13 @@ def weather(
             elif disaster_clean == "tsunami":
                 data["tsunami"] = True
                 data["condition"] = "Oceanic Seismic Surge & Tsunami Warning"
+
+        # Record observation in SQLite database historical archive
+        try:
+            database.save_weather_observation(data)
+        except Exception as db_err:
+            print(f"Weather history save notice: {db_err}")
+
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching weather: {str(e)}")
@@ -300,25 +337,185 @@ def chat(request: ChatRequest):
     - Multilingual query understanding (English, Hindi, Kannada, Tamil, Telugu, Marathi, Bengali)
     - Grounded with live weather datasets and NWP models
     - Contextual decision support for farming, aviation, marine, disaster alerts, and planning
+    - Persistent SQLite chat history tracking
     """
+    # 1. Resolve or create chat session
+    session = database.get_or_create_session(
+        session_id=request.session_id,
+        title=request.message[:45].strip(),
+        language=request.language or "English",
+        city=request.city or "Bengaluru",
+    )
+    sess_id = session["id"]
+
+    # 2. Persist User Prompt to Database
+    database.add_message(
+        session_id=sess_id,
+        role="user",
+        text=request.message,
+        is_voice=bool(request.is_voice),
+    )
+
     try:
         response = ask_weathergpt(
             message=request.message,
             current_city=request.city or "Bengaluru",
             language=request.language or "English",
         )
+        bot_reply = response.get("reply", "")
+        source = response.get("data_source", "WeatherGPT Meteorological Intelligence")
+
+        # 3. Persist Assistant Response to Database
+        database.add_message(
+            session_id=sess_id,
+            role="assistant",
+            text=bot_reply,
+            source=source,
+            is_voice=bool(request.is_voice),
+        )
+
+        response["session_id"] = sess_id
         return response
     except Exception as e:
         print(f"Chat processing error: {e}")
+        fallback_reply = "WeatherGPT is currently processing queries with local meteorological sensors. Please specify your location or question."
+        database.add_message(
+            session_id=sess_id,
+            role="assistant",
+            text=fallback_reply,
+            source="WeatherGPT Recovery Service",
+            is_voice=bool(request.is_voice),
+        )
         return {
-            "reply": "WeatherGPT is currently processing queries with local meteorological sensors. Please specify your location or question.",
+            "reply": fallback_reply,
             "type": "error_fallback",
             "location": request.city or "Bengaluru",
             "temperature": 26.0,
             "condition": "Partly Cloudy",
             "language": request.language or "English",
             "data_source": "WeatherGPT Recovery Service",
+            "session_id": sess_id,
         }
+
+
+# ==========================================
+# CHAT SESSIONS & PERSISTENT HISTORY ENDPOINTS
+# ==========================================
+
+@app.get("/api/chat/sessions")
+def get_chat_sessions(limit: int = Query(default=50, ge=1, le=200)):
+    """Retrieve all past chat sessions from SQLite database."""
+    try:
+        sessions = database.list_sessions(limit=limit)
+        return {"sessions": sessions, "count": len(sessions)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+
+@app.post("/api/chat/sessions")
+def create_new_chat_session(req: CreateSessionRequest):
+    """Create a new chat conversation session in SQLite database."""
+    try:
+        session = database.create_session(
+            title=req.title or "New Weather Consultation",
+            language=req.language or "English",
+            city=req.city or "Bengaluru",
+        )
+        return {"status": "success", "session": session}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating session: {str(e)}")
+
+
+@app.get("/api/chat/sessions/{session_id}/messages")
+def get_session_messages(session_id: str):
+    """Retrieve full message history for a specific chat session."""
+    try:
+        messages = database.get_session_messages(session_id)
+        return {"session_id": session_id, "messages": messages, "count": len(messages)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching session messages: {str(e)}")
+
+
+@app.delete("/api/chat/sessions/{session_id}")
+def delete_chat_session(session_id: str):
+    """Delete a specific chat session and all its messages."""
+    try:
+        deleted = database.delete_session(session_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "success", "deleted_session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
+
+
+@app.delete("/api/chat/history")
+def clear_all_chat_history():
+    """Clear all past conversations and messages from SQLite database."""
+    try:
+        deleted_count = database.clear_all_history()
+        return {"status": "success", "cleared_sessions": deleted_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing chat history: {str(e)}")
+
+
+# ==========================================
+# HISTORICAL WEATHER ARCHIVE ENDPOINTS
+# ==========================================
+
+@app.get("/api/weather/history")
+def get_weather_history_records(
+    city: str | None = Query(default=None, description="Optional city filter"),
+    limit: int = Query(default=60, ge=1, le=500, description="Max historical records to return"),
+):
+    """Retrieve historical weather observations recorded in WeatherGPT SQLite database."""
+    try:
+        records = database.get_weather_history(city=city, limit=limit)
+        return {"status": "success", "count": len(records), "history": records}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching weather history: {str(e)}")
+
+
+@app.delete("/api/weather/history")
+def delete_weather_history_records(
+    city: str | None = Query(default=None, description="Optional city filter to clear"),
+):
+    """Clear past weather history from SQLite database."""
+    try:
+        deleted_count = database.clear_weather_history(city=city)
+        return {"status": "success", "deleted_count": deleted_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing weather history: {str(e)}")
+
+
+# ==========================================
+# USER PREFERENCES & SETTINGS STORAGE
+# ==========================================
+
+class UserSettingsPayload(BaseModel):
+    settings: dict = Field(..., description="User configuration dictionary")
+
+
+@app.get("/api/settings/{user_id}")
+def fetch_user_settings(user_id: str):
+    """Fetch stored user settings from SQLite database."""
+    try:
+        settings = database.get_user_settings(user_id)
+        return {"user_id": user_id, "settings": settings or {}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading user settings: {str(e)}")
+
+
+@app.post("/api/settings/{user_id}")
+def update_user_settings(user_id: str, payload: UserSettingsPayload):
+    """Save or update user settings in SQLite database."""
+    try:
+        res = database.save_user_settings(user_id, payload.settings)
+        return {"status": "success", "data": res}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving user settings: {str(e)}")
+
 
 
 # ==========================================

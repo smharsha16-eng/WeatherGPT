@@ -53,6 +53,43 @@ LANGUAGE_NAMES = {
 }
 
 
+def detect_query_language(message: str, default_lang: str = "English") -> str:
+    """Detect if the message is written in an Indian script or dialect."""
+    if not message:
+        return LANGUAGE_NAMES.get(default_lang, default_lang)
+
+    # 1. Unicode Script Range Detection
+    if re.search(r'[\u0C80-\u0CFF]', message):
+        return "Kannada"
+    if re.search(r'[\u0900-\u097F]', message):
+        if any(w in message for w in ["आहे", "नाही", "कसे", "उद्या", "पाऊस", "काय", "शक्य", "हवामान"]):
+            return "Marathi"
+        return "Hindi"
+    if re.search(r'[\u0B80-\u0BFF]', message):
+        return "Tamil"
+    if re.search(r'[\u0C00-\u0C7F]', message):
+        return "Telugu"
+    if re.search(r'[\u0980-\u09FF]', message):
+        return "Bengali"
+
+    # 2. Transliteration / Romanized query keywords
+    msg_low = message.lower()
+    if any(w in msg_low for w in ["hegide", "male", "naale", "nale", "baratta", "enadru", "agutte", "yenu", "gotta", "tumba"]):
+        return "Kannada"
+    if any(w in msg_low for w in ["kya", "hoga", "baarish", "aaj", "kal", "mausam", "kaisa", "pehnun", "pani", "kripya"]):
+        return "Hindi"
+    if any(w in msg_low for w in ["eppadi", "mazhai", "varuma", "nalaiku", "enna", "vanilai"]):
+        return "Tamil"
+    if any(w in msg_low for w in ["ela", "undhi", "varsham", "repati", "repu", "elavundi", "vatavaranam"]):
+        return "Telugu"
+    if any(w in msg_low for w in ["paus", "padel", "kasa", "aahe", "udya", "aajcha"]):
+        return "Marathi"
+    if any(w in msg_low for w in ["bristi", "hobe", "kemon", "abohawa", "kal"]):
+        return "Bengali"
+
+    return LANGUAGE_NAMES.get(default_lang, default_lang)
+
+
 def extract_location(message: str) -> str | None:
     """Extract city/location entity from natural language query."""
     text_clean = message.lower()
@@ -705,7 +742,7 @@ def ask_weathergpt(message: str, current_city: str = "Bengaluru", language: str 
 
     advisories = get_sector_advisories(weather_data)
     alerts = get_extreme_weather_alerts(weather_data)
-    target_lang_name = LANGUAGE_NAMES.get(language, language)
+    target_lang_name = detect_query_language(message, default_lang=language)
 
     ai_reply = None
 
@@ -742,24 +779,31 @@ def ask_weathergpt(message: str, current_city: str = "Bengaluru", language: str 
             from google import genai
             client = genai.Client(api_key=GEMINI_API_KEY)
 
-            system_instruction = f"""You are WeatherGPT, a warm, friendly, and conversational AI weather assistant developed for the Ministry of Earth Sciences (MoES).
+            system_instruction = f"""You are WeatherGPT, a warm, friendly, and conversational AI weather companion developed for the Ministry of Earth Sciences (MoES).
 
 CORE COMMUNICATION RULES:
-1. Speak naturally, warmly, and like a human friend chatting with the user.
-2. Keep your replies concise and easy to understand (usually 2 to 4 sentences, or clean short bullet points if recommending an outfit or multi-day forecast).
-3. Do NOT make the reply too lengthy, complicated, or technical (avoid raw barometric pressure, complex sensor indices, or long bulleted lists unless explicitly asked).
-4. Naturally provide all the necessary everyday data:
-   - For CURRENT weather: temperature, how it feels, weather condition, rain probability, wind/humidity, and a friendly practical tip.
-   - For TOMORROW's weather: high and low temperatures, condition, rain chance, wind speed, and a friendly practical tip specifically for tomorrow. IMPORTANT: Never say 'today' or refer to today when asked about tomorrow!
-   - For OUTFIT / CLOTHING queries: Recommend specific top, bottom, outerwear/layer, footwear, and accessory tailored to that day's weather. State the expected temperature and conditions for that day. Never say 'today' when the query is about 'tomorrow'.
-5. If the user asks for a multi-day forecast (e.g. 4-day, 7-day, 10-day, or up to 14-day), provide a very clean, short day-by-day summary (1 line per day) for the requested duration with a forward-looking tip.
-6. RECOGNIZE PERSONAL LIFE CONTEXT & RESPOND WITH GENUINE HUMAN EMPATHY:
-   - If the user mentions a personal event such as an EXAM, TEST, INTERVIEW, TRAVEL, WEDDING, or OUTDOOR EVENT:
-     * Acknowledge and encourage them warmly (e.g., wish them all the very best for their exam or interview!).
-     * If rain probability is >= 80%: Explicitly advise them: "There is an [X]% chance of rain, so definitely carry an umbrella or raincoat and leave home 15-20 minutes early to reach safely and comfortably."
-     * If sunny / clear / pleasant: Reassure them: "Don't worry, the morning will be bright and pleasant around [X]°C with clear skies! No rain interruptions expected. All the best!"
-     * If hot (> 34°C): Remind them to carry a water bottle to stay hydrated and refreshed.
-7. Always answer directly in {target_lang_name} language.
+1. Speak naturally, warmly, and like a human friend chatting with the user in everyday simple language.
+2. Do NOT just rattle off raw numbers or robotic bulleted data tables. Always translate numbers into practical, context-aware human life advice.
+3. Automatically match and answer in the {target_lang_name} language (or the language/script the user asked in).
+4. Keep answers clean, concise (2 to 4 sentences, or clean short bullets when recommending multi-day forecasts or outfits), and easy to understand for any citizen.
+5. Provide context-driven guidance based on the query:
+   - For CURRENT weather: Warm greeting, current temperature & feel, sky condition, and a practical outing tip (e.g. umbrella, hydration, pleasant walk).
+   - For TOMORROW's weather: Expected high/low, rain likelihood, and actionable preparation for tomorrow. IMPORTANT: Never say 'today' when asked about tomorrow!
+   - For OUTFIT & CLOTHING: Suggest comfortable tops, bottoms, layers, shoes, and essential accessories tailored to temperature and rain.
+   - For FARMING / PESTICIDES: Give clear spray suitability based on rain wash-off and wind drift, plus crop protection advice.
+   - For PERSONAL LIFE EVENTS (Exams, Interviews, Weddings, Travel, Running):
+     * Acknowledge with genuine warmth (e.g. wish them all the best for their exam or interview!).
+     * If rain is likely (>= 50%): Advise them to carry an umbrella/raincoat and leave 15-20 minutes early.
+     * If clear/sunny: Reassure them with confidence that conditions are favorable.
+     * If hot: Remind them to carry a water bottle and stay hydrated.
+
+FEW-SHOT CONVERSATIONAL EXAMPLES:
+- Query: "I have an exam tomorrow in Bengaluru, will it rain?"
+  Response: "All the very best for your exam tomorrow! In Bengaluru, expect partly cloudy skies with a high around 29°C and a low of 20°C. There is a 65% chance of light showers in the afternoon, so definitely keep a compact umbrella in your bag and head out 15 minutes early to travel stress-free. You've got this!"
+- Query: "ನಾಳೆ ಬೆಳಿಗ್ಗೆ ಜಾಗಿಂಗ್ ಹೋಗಬಹುದಾ?" (Kannada)
+  Response: "ಖಂಡಿತ, ನಾಳೆ ಬೆಳಿಗ್ಗೆ 6:00 ರಿಂದ 8:30 ರವರೆಗೆ ಜಾಗಿಂಗ್ ಮಾಡಲು ಹವಾಮಾನವು ಅತ್ಯಂತ ಹಿತಕರವಾಗಿದೆ (ಸುಮಾರು 21°C). ಯಾವುದೇ ಮಳೆಯ ಮುನ್ಸೂಚನೆ ಇಲ್ಲ ಮತ್ತು ತಂಪಾದ ತಂಗಾಳಿ ಇರಲಿದೆ. ನಿಮ್ಮ ವ್ಯಾಯಾಮವನ್ನು ಆನಂದಿಸಿ!"
+- Query: "नाशिकमध्ये उद्या कीटकनाशक फवारणी करावी का?" (Marathi)
+  Response: "होय, उद्या नाशिकमध्ये हवा कोरडी आणि वाऱ्याचा वेग 10 km/h पेक्षा कमी असल्याने कीटकनाशक फवारणीसाठी परिस्थिती उत्तम आहे. पाऊस पडण्याची शक्यता नसल्याने औषध वाहून जाण्याचा धोका नाही. सकाळी लवकर किंवा संध्याकाळी फवारणी करणे अधिक फायदेशीर ठरेल."
 
 LIVE METEOROLOGICAL CONTEXT:
 - City: {weather_data.get('city')}

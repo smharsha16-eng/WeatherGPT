@@ -299,18 +299,76 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false, the
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
             {onThemeChange && (
-              <button
-                type="button"
-                className="sidebar-theme-btn"
-                onClick={() => {
-                  const next = theme === "default" ? "light" : theme === "light" ? "dark" : "default";
-                  onThemeChange(next);
+              <div
+                className="auth-theme-pills"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: "var(--card-light, rgba(255,255,255,0.06))",
+                  border: "1px solid var(--border)",
+                  borderRadius: "20px",
+                  padding: "2px",
+                  gap: "2px",
                 }}
-                title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
-                style={{ fontSize: "12px", padding: "5px 9px" }}
               >
-                {theme === "light" ? "☀️ Light" : theme === "dark" ? "🌙 Dark" : "🌐 Default"}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onThemeChange("default")}
+                  className={`auth-theme-pill-btn ${theme === "default" ? "active" : ""}`}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: theme === "default" ? "var(--primary, #318cff)" : "transparent",
+                    color: theme === "default" ? "#ffffff" : "var(--muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Default Meteorological Theme"
+                >
+                  🌐 Default
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onThemeChange("light")}
+                  className={`auth-theme-pill-btn ${theme === "light" ? "active" : ""}`}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: theme === "light" ? "#f59e0b" : "transparent",
+                    color: theme === "light" ? "#ffffff" : "var(--muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Light Daylight Theme"
+                >
+                  ☀️ Light
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onThemeChange("dark")}
+                  className={`auth-theme-pill-btn ${theme === "dark" ? "active" : ""}`}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: theme === "dark" ? "#6366f1" : "transparent",
+                    color: theme === "dark" ? "#ffffff" : "var(--muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Dark Obsidian Theme"
+                >
+                  🌙 Dark
+                </button>
+              </div>
             )}
             {isModal && onClose && (
               <button className="auth-close-btn" onClick={onClose} title="Close">

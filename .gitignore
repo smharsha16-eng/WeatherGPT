@@ -20,6 +20,11 @@ yarn-error.log*
 # Build outputs
 my-react-app/dist/
 
+# Database & runtime files
+*.db
+*.sqlite
+*.sqlite3
+
 # OS / Editor
 .DS_Store
 Thumbs.db

@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from "@vis.gl/react-google-maps";
-import { getTranslation, translateCondition } from "../utils/translations";
+import { getTranslation, translateCondition, translateDay } from "../utils/translations";
 
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
-// Provide only two key suggestions as requested
+// Key Indian city suggestions: Bengaluru, Delhi
 const QUICK_SUGGESTIONS = [
-  { name: "New Delhi", lat: 28.6139, lng: 77.2090 },
   { name: "Bengaluru", lat: 12.9716, lng: 77.5946 },
+  { name: "Delhi", lat: 28.6139, lng: 77.2090 },
 ];
 
 function isInsideIndia(lat, lng) {
@@ -24,6 +24,7 @@ export default function WeatherMapPage({
   onTriggerDisasterAlert,
   onStopSiren,
   onPlaySiren,
+  onLocationSelect,
 }) {
   const t = getTranslation(language);
 
@@ -50,10 +51,17 @@ export default function WeatherMapPage({
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [userOutgoingPlan, setUserOutgoingPlan] = useState("now"); // "now" | "later" | "no"
   const [mapForecastDays, setMapForecastDays] = useState(14);
 
-  // Leaflet map refs
+  // DOM and Leaflet map refs
+  const searchContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
   const leafletMapRef = useRef(null);
   const leafletMarkerRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -186,55 +194,184 @@ export default function WeatherMapPage({
     fetchLocationWeather(selectedCoords.lat, selectedCoords.lng, "Bengaluru, Karnataka");
   }, []);
 
-  // Handle location selection from user
-  const handleSelectLocation = (lat, lng, name = null, disasterOverride = null) => {
+  // Debounced auto-suggestions fetcher
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setIsSuggesting(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSuggesting(true);
+      try {
+        const res = await fetch(`${apiBase}/locations/suggest?q=${encodeURIComponent(trimmed)}&limit=8`);
+        if (res.ok) {
+          const data = await res.json();
+          const items = data.suggestions || [];
+          setSuggestions(items);
+          setShowSuggestions(items.length > 0);
+          setHighlightedIndex(-1);
+        }
+      } catch (err) {
+        console.warn("Location suggestions warning:", err);
+      } finally {
+        setIsSuggesting(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, apiBase]);
+
+  // Click outside to dismiss suggestions dropdown (uses capture phase to intercept before map canvases swallow events)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("pointerdown", handleClickOutside, true);
+    document.addEventListener("mousedown", handleClickOutside, true);
+    document.addEventListener("touchstart", handleClickOutside, true);
+    return () => {
+      document.removeEventListener("pointerdown", handleClickOutside, true);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+      document.removeEventListener("touchstart", handleClickOutside, true);
+    };
+  }, []);
+
+  // Real-time GPS Geolocation Detection for Current Location
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setToastMessage("⚠️ Geolocation is not supported by your browser.");
+      return;
+    }
+    setIsLocating(true);
+    setToastMessage("📡 Detecting your live location via GPS...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        setIsLocating(false);
+        const { latitude, longitude } = pos.coords;
+        setToastMessage(`📍 GPS coordinates acquired (${latitude.toFixed(3)}°N, ${longitude.toFixed(3)}°E). Updating map & weather...`);
+        handleSelectLocation(latitude, longitude, "My Current Location", null, 13);
+        if (onLocationSelect) {
+          onLocationSelect(latitude, longitude);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        let msg = "Could not retrieve your current location.";
+        if (err.code === 1) msg = "Location permission denied. Please allow location access in your browser settings.";
+        else if (err.code === 2) msg = "GPS position unavailable.";
+        else if (err.code === 3) msg = "GPS location request timed out.";
+        setToastMessage(`⚠️ ${msg}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  };
+
+  // Handle location selection from user with zoom
+  const handleSelectLocation = (lat, lng, name = null, disasterOverride = null, zoomLevel = 11) => {
     if (!isInsideIndia(lat, lng)) {
       setToastMessage("⚠️ Selected coordinates are outside India. Please select a point within the Indian subcontinent.");
       return;
     }
     setSelectedCoords({ lat, lng });
     setMapCenter({ lat, lng });
+    setMapZoom(zoomLevel);
     fetchLocationWeather(lat, lng, name, disasterOverride);
 
-    // If leaflet is active, update marker position
+    // If Leaflet is active, smoothly fly and zoom into target location
     if (leafletMarkerRef.current) {
       leafletMarkerRef.current.setLatLng([lat, lng]);
     }
     if (leafletMapRef.current) {
-      leafletMapRef.current.panTo([lat, lng], { animate: true });
+      leafletMapRef.current.flyTo([lat, lng], zoomLevel, { duration: 1.2 });
+    }
+  };
+
+  // Handle place selection from auto-suggestion dialog
+  const handleSelectPlace = (place) => {
+    const lat = parseFloat(place.lat);
+    const lon = parseFloat(place.lon);
+    const displayName = place.display_name || `${place.name}, ${place.state || "India"}`;
+
+    setSearchQuery(place.name || displayName.split(",")[0]);
+    setShowSuggestions(false);
+    setHighlightedIndex(-1);
+
+    handleSelectLocation(lat, lon, displayName, null, 12);
+  };
+
+  // Handle keyboard navigation inside search input
+  const handleInputKeyDown = (e) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+          handleSelectPlace(suggestions[highlightedIndex]);
+        } else {
+          handleSelectPlace(suggestions[0]);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowSuggestions(false);
+        return;
+      }
     }
   };
 
   // Handle Google Maps map click
   const handleGoogleMapClick = (e) => {
+    setShowSuggestions(false);
     const lat = e.detail?.latLng?.lat;
     const lng = e.detail?.latLng?.lng;
     if (lat !== undefined && lng !== undefined) {
       setShowInfoWindow(true);
-      handleSelectLocation(lat, lng);
+      handleSelectLocation(lat, lng, null, null, mapZoom);
     }
   };
 
   // Handle city search submit
   const handleSearchSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
+    setShowSuggestions(false);
     if (!searchQuery.trim()) return;
+
+    // If suggestions are visible and active, use top/highlighted suggestion
+    if (showSuggestions && suggestions.length > 0) {
+      if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+        handleSelectPlace(suggestions[highlightedIndex]);
+        return;
+      }
+      handleSelectPlace(suggestions[0]);
+      return;
+    }
 
     try {
       setLoading(true);
-      const res = await fetch(`${apiBase}/weather?city=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`${apiBase}/weather?city=${encodeURIComponent(searchQuery.trim())}`);
       if (res.ok) {
         const data = await res.json();
         const lat = data.lat || 12.9716;
         const lon = data.lon || 77.5946;
-        if (!isInsideIndia(lat, lon)) {
-          setToastMessage(`⚠️ "${searchQuery}" resolved outside India bounds.`);
-        } else {
-          handleSelectLocation(lat, lon, `${data.city}, ${data.country || "IN"}`);
-          if (leafletMapRef.current) {
-            leafletMapRef.current.setView([lat, lon], 8, { animate: true });
-          }
-        }
+        const resolvedName = data.city ? `${data.city}, ${data.region || data.country || "IN"}` : searchQuery;
+        setShowSuggestions(false);
+        handleSelectLocation(lat, lon, resolvedName, null, 12);
       } else {
         setToastMessage(`Could not resolve location: "${searchQuery}"`);
       }
@@ -290,6 +427,7 @@ export default function WeatherMapPage({
       `).openPopup();
 
       map.on("click", (e) => {
+        setShowSuggestions(false);
         const { lat, lng } = e.latlng;
         marker.setLatLng([lat, lng]);
         marker.bindPopup(`
@@ -344,26 +482,20 @@ export default function WeatherMapPage({
     conditionText.includes("drizzle") ||
     conditionText.includes("shower") ||
     conditionText.includes("thunderstorm");
-    rainProbability >= 30 ||
-    (weatherData?.precipitation_mm || 0) > 0.4 ||
-    conditionText.includes("rain") ||
-    conditionText.includes("drizzle") ||
-    conditionText.includes("shower") ||
-    conditionText.includes("thunderstorm");
 
   return (
     <section className="weather-map-view" style={{ animation: "fadeIn 0.3s ease", display: "flex", flexDirection: "column", gap: "18px" }}>
-      {/* 1. TITLE & SENTENCE */}
-      <div className="card" style={{ padding: "20px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-          <div>
+      {/* 1. TITLE & CELESTIAL HEADER */}
+      <div className="card weather-map-header-card" style={{ padding: "20px 24px", position: "relative", zIndex: 1200, overflow: "visible" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+          <div style={{ minWidth: "240px", flex: "1" }}>
             <span className="eyebrow" style={{ color: "var(--primary-light)", letterSpacing: "1px" }}>
               {t.mapEyebrow}
             </span>
             <h1 style={{ fontSize: "1.85rem", fontWeight: "800", margin: "4px 0" }}>
               {t.mapHeaderTitle}
             </h1>
-            <p style={{ color: "var(--muted)", fontSize: "1rem", margin: "2px 0 0 0" }}>
+            <p style={{ color: "var(--muted)", fontSize: "0.95rem", margin: "2px 0 0 0" }}>
               {t.mapHeaderDesc}
             </p>
           </div>
@@ -442,56 +574,364 @@ export default function WeatherMapPage({
           </div>
         )}
 
-        {/* 2. SEARCH BAR */}
-        <form onSubmit={handleSearchSubmit} style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t.searchPlaceholder}
-            style={{
-              flex: "1",
-              padding: "12px 18px",
-              background: "var(--card-light)",
-              border: "1px solid var(--border)",
-              borderRadius: "10px",
-              color: "var(--text)",
-              fontSize: "0.98rem",
-            }}
-          />
-          <button type="submit" className="ask-btn" disabled={loading} style={{ whiteSpace: "nowrap" }}>
-            🔍 {t.searchBtn}
-          </button>
-        </form>
+        {/* 2. SEARCH BAR WITH DYNAMIC SUGGESTIONS DIALOG */}
+        <div ref={searchContainerRef} className="weather-map-search-wrapper" style={{ position: "relative", zIndex: 1300, marginTop: "16px" }}>
+          <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: "10px", width: "100%" }}>
+            <div style={{ position: "relative", flex: "1" }}>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => {
+                  setShowSuggestions(true);
+                }}
+                onKeyDown={handleInputKeyDown}
+                placeholder={t.searchPlaceholder || "Search any city, town, district, taluk, village across India..."}
+                style={{
+                  width: "100%",
+                  padding: "13px 44px 13px 44px",
+                  background: "var(--card-light)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  color: "var(--text)",
+                  fontSize: "0.98rem",
+                  outline: "none",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                }}
+                autoComplete="off"
+                spellCheck="false"
+              />
+              <span style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", fontSize: "16px", pointerEvents: "none", opacity: 0.7 }}>
+                🔍
+              </span>
+              <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "6px" }}>
+                {isSuggesting && (
+                  <span style={{ fontSize: "13px", display: "inline-block", opacity: 0.8 }}>
+                    ⏳
+                  </span>
+                )}
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSuggestions([]);
+                      setShowSuggestions(false);
+                      searchInputRef.current?.focus();
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--muted)",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      padding: "2px 6px",
+                      borderRadius: "50%",
+                    }}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="weather-map-search-btn"
+              disabled={loading}
+              style={{
+                whiteSpace: "nowrap",
+                padding: "0 22px",
+                height: "48px",
+                borderRadius: "10px",
+                fontWeight: "700",
+                fontSize: "0.95rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                color: "#ffffff",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(2, 132, 199, 0.35)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <span style={{ fontSize: "15px" }}>🔍</span>
+              <span style={{ color: "#ffffff", fontWeight: "700" }}>
+                {loading ? "Locating..." : (t.searchBtn || "Search Location")}
+              </span>
+            </button>
+          </form>
 
-        {/* 3. ONLY ONE OR TWO SUGGESTIONS */}
+          {/* DYNAMIC AUTO-SUGGESTION DIALOG BOX */}
+          {showSuggestions && (
+            <div
+              className="map-suggestions-dropdown"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                left: 0,
+                right: 0,
+                zIndex: 999999,
+                background: "var(--card-light, #0d2138)",
+                backdropFilter: "blur(14px)",
+                border: "1px solid var(--border-light, rgba(92,167,255,0.3))",
+                borderRadius: "12px",
+                boxShadow: "0 16px 40px rgba(0,0,0,0.65), 0 0 1px rgba(255,255,255,0.1)",
+                overflow: "hidden",
+                maxHeight: "360px",
+                display: "flex",
+                flexDirection: "column",
+                animation: "fadeIn 0.18s ease",
+              }}
+            >
+              <div
+                style={{
+                  padding: "9px 16px",
+                  borderBottom: "1px solid var(--border)",
+                  fontSize: "0.76rem",
+                  fontWeight: "700",
+                  color: "var(--muted)",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "rgba(0,0,0,0.12)",
+                }}
+              >
+                <span>📍 Matching Places in India ({suggestions.length})</span>
+                <span style={{ fontSize: "0.72rem", color: "var(--primary-light)", textTransform: "none", fontWeight: "600" }}>
+                  ↑ ↓ to navigate • Enter to point
+                </span>
+              </div>
+
+              <div style={{ overflowY: "auto", maxHeight: "290px" }}>
+                {/* 1ST DROPDOWN OPTION: MY CURRENT LOCATION */}
+                <div
+                  onClick={() => {
+                    setShowSuggestions(false);
+                    handleUseCurrentLocation();
+                  }}
+                  style={{
+                    padding: "10px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    cursor: "pointer",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    borderBottom: "1px solid var(--border)",
+                    color: "var(--text)",
+                    transition: "background 0.2s ease",
+                  }}
+                >
+                  <span style={{ fontSize: "1.3rem" }}>🎯</span>
+                  <div style={{ flex: 1 }}>
+                    <strong style={{ fontSize: "0.92rem", color: "#10b981", display: "block" }}>
+                      {isLocating ? "Detecting GPS location..." : "📍 Use My Current Location"}
+                    </strong>
+                    <span style={{ fontSize: "0.76rem", color: "var(--muted)" }}>
+                      Automatically center map and load live meteorological telemetry for your real device coordinates
+                    </span>
+                  </div>
+                  <span style={{ fontSize: "0.78rem", color: "#10b981", fontWeight: "700" }}>
+                    Live GPS →
+                  </span>
+                </div>
+
+                {suggestions.length > 0 ? (
+                  suggestions.map((item, idx) => {
+                    const isHighlighted = idx === highlightedIndex;
+                    const getIcon = (cat) => {
+                      if (cat === "Village") return "🏡";
+                      if (cat?.includes("Taluk") || cat?.includes("Tehsil")) return "🏘️";
+                      if (cat?.includes("District")) return "📍";
+                      if (cat === "Hill Station") return "⛰️";
+                      if (cat?.includes("City")) return "🏙️";
+                      return "📍";
+                    };
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectPlace(item)}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
+                        className={`map-suggestion-item ${isHighlighted ? "highlighted" : ""}`}
+                        style={{
+                          padding: "11px 16px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          cursor: "pointer",
+                          borderBottom: idx < suggestions.length - 1 ? "1px solid var(--border)" : "none",
+                          background: isHighlighted ? "var(--item-hover, rgba(49, 140, 255, 0.18))" : "transparent",
+                          transition: "background 0.15s ease",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: "1" }}>
+                          <span style={{ fontSize: "1.35rem", flexShrink: 0 }}>
+                            {getIcon(item.category)}
+                          </span>
+                          <div style={{ minWidth: 0, flex: "1" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                              <strong style={{ fontSize: "0.95rem", color: isHighlighted ? "var(--primary-light)" : "var(--text)" }}>
+                                {item.name}
+                              </strong>
+                              {item.category && (
+                                <span
+                                  style={{
+                                    fontSize: "0.68rem",
+                                    fontWeight: "700",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
+                                    background:
+                                      item.category === "Village"
+                                        ? "rgba(16, 185, 129, 0.18)"
+                                        : item.category?.includes("Taluk")
+                                        ? "rgba(56, 189, 248, 0.18)"
+                                        : item.category?.includes("District")
+                                        ? "rgba(245, 158, 11, 0.18)"
+                                        : "rgba(139, 92, 246, 0.18)",
+                                    color:
+                                      item.category === "Village"
+                                        ? "#10b981"
+                                        : item.category?.includes("Taluk")
+                                        ? "#38bdf8"
+                                        : item.category?.includes("District")
+                                        ? "#f59e0b"
+                                        : "#a78bfa",
+                                    border: "1px solid rgba(255,255,255,0.08)",
+                                  }}
+                                >
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {item.display_name}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <span style={{ fontSize: "0.72rem", color: "var(--muted)", fontFamily: "monospace", display: "block" }}>
+                            {item.lat.toFixed(2)}°N, {item.lon.toFixed(2)}°E
+                          </span>
+                          <span style={{ fontSize: "0.76rem", color: "var(--primary-light)", fontWeight: "600" }}>
+                            Point Map →
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : !searchQuery.trim() ? (
+                  <div style={{ padding: "6px 0" }}>
+                    <div style={{ padding: "8px 16px", fontSize: "0.72rem", color: "var(--muted)", textTransform: "uppercase", fontWeight: "700" }}>
+                      Key Cities:
+                    </div>
+                    {QUICK_SUGGESTIONS.map((st, qIdx) => (
+                      <div
+                        key={qIdx}
+                        onClick={() => {
+                          setShowSuggestions(false);
+                          handleSelectLocation(st.lat, st.lng, st.name);
+                        }}
+                        style={{
+                          padding: "10px 16px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          cursor: "pointer",
+                          borderBottom: qIdx === 0 ? "1px solid var(--border)" : "none",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--item-hover, rgba(49, 140, 255, 0.18))")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <span style={{ fontSize: "1.2rem" }}>🏙️</span>
+                          <div>
+                            <strong style={{ fontSize: "0.92rem", color: "var(--text)", display: "block" }}>📍 {st.name}</strong>
+                            <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Click to inspect meteorological telemetry</span>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: "0.76rem", color: "var(--primary-light)", fontWeight: "600" }}>Point Map →</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: "0.88rem" }}>
+                    {isSuggesting ? "Searching place..." : `No matching places found for "${searchQuery}". Press Enter to search anyway.`}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. SUGGESTIONS BAR WITH 1ST OPTION AS CURRENT LOCATION */}
         <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "0.82rem", color: "var(--muted)", fontWeight: "600" }}>
             {t.suggestionsLabel}
           </span>
-          {QUICK_SUGGESTIONS.map((st) => (
-            <button
-              key={st.name}
-              type="button"
-              onClick={() => handleSelectLocation(st.lat, st.lng, st.name)}
-              style={{
-                padding: "5px 14px",
-                background:
-                  selectedCoords.lat === st.lat && selectedCoords.lng === st.lng
-                    ? "var(--primary)"
+
+          {/* FIRST SUGGESTION OPTION: CURRENT LOCATION */}
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            title="Detect real GPS coordinates and update map & weather"
+            style={{
+              padding: "5px 15px",
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              border: "1px solid #10b981",
+              borderRadius: "20px",
+              color: "#ffffff",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              fontWeight: "600",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.35)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {isLocating ? "⏳ Locating..." : "📍 My current location"}
+          </button>
+
+          {QUICK_SUGGESTIONS.map((st) => {
+            const isSelected = selectedCoords.lat === st.lat && selectedCoords.lng === st.lng;
+            return (
+              <button
+                key={st.name}
+                type="button"
+                onClick={() => handleSelectLocation(st.lat, st.lng, st.name)}
+                className={`map-city-suggestion-chip ${isSelected ? "selected" : ""}`}
+                style={{
+                  padding: "5px 16px",
+                  background: isSelected
+                    ? "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)"
                     : "var(--card-light)",
-                border: "1px solid var(--border)",
-                borderRadius: "20px",
-                color: "var(--text)",
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                fontWeight: "500",
-                transition: "all 0.2s ease",
-              }}
-            >
-              📍 {st.name}
-            </button>
-          ))}
+                  border: isSelected ? "1.5px solid #0284c7" : "1px solid var(--border)",
+                  borderRadius: "20px",
+                  color: isSelected ? "#0369a1" : "var(--text)",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  fontWeight: isSelected ? "700" : "600",
+                  transition: "all 0.2s ease",
+                  boxShadow: isSelected ? "0 2px 8px rgba(2, 132, 199, 0.25)" : "none",
+                }}
+              >
+                📍 {st.name}
+              </button>
+            );
+          })}
 
           {/* Quick Disaster Simulation Buttons on Weather Map */}
           <div style={{ marginLeft: "auto", display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
@@ -545,6 +985,7 @@ export default function WeatherMapPage({
           width: "100%",
           height: "620px",
           position: "relative",
+          zIndex: 10,
           overflow: "hidden",
         }}
       >
@@ -941,7 +1382,7 @@ export default function WeatherMapPage({
                         border: d.rain_chance > 40 ? "1px solid rgba(49, 140, 255, 0.4)" : "1px solid var(--border)",
                       }}
                     >
-                      <div style={{ color: "var(--muted)", fontWeight: "600" }}>{d.day}</div>
+                      <div style={{ color: "var(--muted)", fontWeight: "600" }}>{i === 0 ? (t.today || "Today") : translateDay(d.day, language)}</div>
                       <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginBottom: "2px" }}>{d.date ? d.date.slice(5) : ""}</div>
                       <div style={{ fontSize: "1.2rem", margin: "2px 0" }}>
                         {d.icon ? <img src={d.icon} alt="" style={{ width: "26px" }} /> : "⛅"}

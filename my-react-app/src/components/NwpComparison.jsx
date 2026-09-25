@@ -1,4 +1,4 @@
-import { getTranslation, translateRiskLevel } from "../utils/translations";
+import { getTranslation, translateRiskLevel, translateDay, translateNwpConfidence } from "../utils/translations";
 
 export default function NwpComparison({ compareData, loading, language = "English" }) {
   const t = getTranslation(language);
@@ -30,7 +30,7 @@ export default function NwpComparison({ compareData, loading, language = "Englis
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ background: "rgba(14, 165, 233, 0.15)", padding: "6px 12px", borderRadius: "8px", border: "1px solid rgba(14, 165, 233, 0.3)" }}>
             <span style={{ fontSize: "11px", color: "#38bdf8", display: "block" }}>{t.ensembleConfidence || "ENSEMBLE CONFIDENCE"}</span>
-            <strong style={{ fontSize: "15px", color: "#0ea5e9" }}>{overall_confidence}</strong>
+            <strong style={{ fontSize: "15px", color: "#0ea5e9" }}>{translateNwpConfidence(overall_confidence, language)}</strong>
           </div>
           <div style={{ background: "rgba(34, 197, 94, 0.15)", padding: "6px 12px", borderRadius: "8px", border: "1px solid rgba(34, 197, 94, 0.3)" }}>
             <span style={{ fontSize: "11px", color: "#4ade80", display: "block" }}>{t.avgTempSpread || "AVG TEMP SPREAD"}</span>
@@ -40,15 +40,15 @@ export default function NwpComparison({ compareData, loading, language = "Englis
       </div>
 
       <div style={{ overflowX: "auto", marginTop: "16px" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", textAlign: "left" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--muted)", textTransform: "uppercase", fontSize: "11px", letterSpacing: "0.5px" }}>
-              <th style={{ padding: "10px 12px" }}>{t.forecastDay || "Forecast Day"}</th>
-              <th style={{ padding: "10px 12px", color: "#38bdf8" }}>NOAA GFS ({gfs_model?.resolution || "0.25°"})</th>
-              <th style={{ padding: "10px 12px", color: "#a855f7" }}>ECMWF IFS ({ecmwf_model?.resolution || "0.25°"})</th>
-              <th style={{ padding: "10px 12px" }}>{t.tempSpread || "Temp Spread"}</th>
-              <th style={{ padding: "10px 12px" }}>{t.gfsRainVsEcmwf || "GFS Rain vs ECMWF Rain"}</th>
-              <th style={{ padding: "10px 12px" }}>{t.modelAgreement || "Model Agreement"}</th>
+              <th style={{ padding: "14px 12px" }}>{t.forecastDay || "Forecast Day"}</th>
+              <th style={{ padding: "14px 12px", color: "#38bdf8" }}>NOAA GFS ({gfs_model?.resolution || "0.25°"})</th>
+              <th style={{ padding: "14px 12px", color: "#a855f7" }}>ECMWF IFS ({ecmwf_model?.resolution || "0.25°"})</th>
+              <th style={{ padding: "14px 12px" }}>{t.tempSpread || "Temp Spread"}</th>
+              <th style={{ padding: "14px 12px" }}>{t.gfsRainVsEcmwf || "GFS Rain vs ECMWF Rain"}</th>
+              <th style={{ padding: "14px 12px" }}>{t.modelAgreement || "Model Agreement"}</th>
             </tr>
           </thead>
           <tbody>
@@ -60,27 +60,28 @@ export default function NwpComparison({ compareData, loading, language = "Englis
 
               return (
                 <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <td style={{ padding: "12px", fontWeight: "600" }}>
-                    {row.day} <span style={{ color: "var(--muted)", fontWeight: "normal", fontSize: "11px" }}>({row.date})</span>
+                  <td style={{ padding: "14px 12px", fontWeight: "600", fontSize: "14px" }}>
+                    <div>{translateDay(row.day, language)}</div>
+                    <span style={{ color: "var(--muted)", fontWeight: "normal", fontSize: "12px" }}>({row.date})</span>
                   </td>
-                  <td style={{ padding: "12px", color: "#38bdf8", fontWeight: "600" }}>
-                    {row.gfs_max_temp}°C <span style={{ color: "var(--muted)", fontSize: "11px", fontWeight: "normal" }}>({row.gfs_rain_chance}% {t.precipitation || "rain"})</span>
+                  <td style={{ padding: "14px 12px", color: "#38bdf8", fontWeight: "600", fontSize: "15px" }}>
+                    {row.gfs_max_temp}°C <span style={{ color: "var(--muted)", fontSize: "12px", fontWeight: "normal" }}>({row.gfs_rain_chance}% {t.precipitation || "rain"})</span>
                   </td>
-                  <td style={{ padding: "12px", color: "#a855f7", fontWeight: "600" }}>
-                    {row.ecmwf_max_temp}°C <span style={{ color: "var(--muted)", fontSize: "11px", fontWeight: "normal" }}>({row.ecmwf_rain_chance}% {t.precipitation || "rain"})</span>
+                  <td style={{ padding: "14px 12px", color: "#a855f7", fontWeight: "600", fontSize: "15px" }}>
+                    {row.ecmwf_max_temp}°C <span style={{ color: "var(--muted)", fontSize: "12px", fontWeight: "normal" }}>({row.ecmwf_rain_chance}% {t.precipitation || "rain"})</span>
                   </td>
-                  <td style={{ padding: "12px" }}>
+                  <td style={{ padding: "14px 12px", fontSize: "15px" }}>
                     <span style={{ fontWeight: "600" }}>±{row.temp_spread}°C</span>
                   </td>
-                  <td style={{ padding: "12px", color: "var(--muted)" }}>
+                  <td style={{ padding: "14px 12px", color: "var(--muted)", fontSize: "14px" }}>
                     {row.gfs_rain_mm} mm vs {row.ecmwf_rain_mm} mm
                   </td>
-                  <td style={{ padding: "12px" }}>
+                  <td style={{ padding: "14px 12px" }}>
                     <span style={{
                       display: "inline-block",
-                      padding: "3px 8px",
+                      padding: "4px 10px",
                       borderRadius: "6px",
-                      fontSize: "11px",
+                      fontSize: "12px",
                       fontWeight: "600",
                       background: badgeBg,
                       color: badgeColor,
@@ -101,4 +102,3 @@ export default function NwpComparison({ compareData, loading, language = "Englis
     </div>
   );
 }
-
