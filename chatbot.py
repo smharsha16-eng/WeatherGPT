@@ -53,8 +53,31 @@ LANGUAGE_NAMES = {
 }
 
 
+INDIC_CITY_MAP = {
+    "बेंगलुरु": "Bengaluru", "बैंगलोर": "Bengaluru", "ಬೆಂಗಳೂರು": "Bengaluru", "பெங்களூரு": "Bengaluru", "బెంగళూరు": "Bengaluru", "बेंगळुरू": "Bengaluru", "বেঙ্গালুরু": "Bengaluru",
+    "दिल्ली": "Delhi", "नई दिल्ली": "New Delhi", "ದೆಹಲಿ": "Delhi", "டெல்லி": "Delhi", "ఢిల్లీ": "Delhi", "দিল্লি": "Delhi",
+    "मुंबई": "Mumbai", "ಮುಂಬೈ": "Mumbai", "மும்பை": "Mumbai", "ముంబై": "Mumbai", "মুম্বই": "Mumbai",
+    "चेन्नई": "Chennai", "ಚೆನ್ನೈ": "Chennai", "சென்னை": "Chennai", "చెన్నై": "Chennai", "চেন্নাই": "Chennai",
+    "कोलकाता": "Kolkata", "ಕೋಲ್ಕತ್ತಾ": "Kolkata", "கொல்கத்தா": "Kolkata", "కోల్‌కతా": "Kolkata", "কলকাতা": "Kolkata",
+    "हैदराबाद": "Hyderabad", "ಹೈದರಾಬಾದ್": "Hyderabad", "ஹைதராபாத்": "Hyderabad", "హైదరాబాద్": "Hyderabad", "হায়দ্রাবাদ": "Hyderabad",
+    "पुणे": "Pune", "ಪುಣೆ": "Pune", "புனே": "Pune", "పూణే": "Pune", "পুনে": "Pune",
+    "मैसूर": "Mysuru", "ಮೈಸೂರು": "Mysuru", "மைசூர்": "Mysuru", "మైసూరు": "Mysuru", "মহীশূর": "Mysuru",
+    "ऊटी": "Ooty", "ಊಟಿ": "Ooty", "ஊட்டி": "Ooty", "ఊటీ": "Ooty", "উটি": "Ooty",
+    "शिमला": "Shimla", "ಶಿಮ್ಲಾ": "Shimla", "சிம்லா": "Shimla", "సిమ్లా": "Shimla", "শিমলা": "Shimla",
+    "मनाली": "Manali", "ಮನಾಲಿ": "Manali", "மணாலி": "Manali", "మనాలీ": "Manali", "মানালি": "Manali",
+    "जयपुर": "Jaipur", "ಜೈಪುರ": "Jaipur", "ஜெய்ப்பூர்": "Jaipur", "జైపూర్": "Jaipur", "জয়পুর": "Jaipur",
+    "अहमदाबाद": "Ahmedabad", "ಅಹಮದಾಬಾದ್": "Ahmedabad", "அகமதாபாத்": "Ahmedabad", "అహ్మదాబాద్": "Ahmedabad", "আহমেদাবাদ": "Ahmedabad",
+    "लखनऊ": "Lucknow", "ಲಕ್ನೋ": "Lucknow", "லக்னோ": "Lucknow", "లక్నో": "Lucknow", "লখনউ": "Lucknow",
+    "गोवा": "Goa", "ಗೋವಾ": "Goa", "கோவா": "Goa", "గోవా": "Goa", "গোয়া": "Goa",
+    "कोच्चि": "Kochi", "ಕೊಚ್ಚಿ": "Kochi", "கொச்சி": "Kochi", "కొచ్చి": "Kochi", "কোচি": "Kochi",
+    "मंगलोर": "Mangaluru", "ಮಂಗಳೂರು": "Mangaluru", "மங்களூரு": "Mangaluru", "మంగళూరు": "Mangaluru", "ম্যাঙ্গালোর": "Mangaluru",
+    "हुबली": "Hubballi", "ಹುಬ್ಬಳ್ಳಿ": "Hubballi", "ஹுப்ளி": "Hubballi", "హుబ్లీ": "Hubballi", "হুবলি": "Hubballi",
+    "बेलगाम": "Belagavi", "ಬೆಳಗಾವಿ": "Belagavi", "பெல்காம்": "Belagavi", "బెల్గాం": "Belagavi", "বেলগাঁও": "Belagavi",
+}
+
+
 def detect_query_language(message: str, default_lang: str = "English") -> str:
-    """Detect if the message is written in an Indian script or dialect."""
+    """Detect if the message is written in an Indian script, dialect, or English."""
     if not message:
         return LANGUAGE_NAMES.get(default_lang, default_lang)
 
@@ -74,9 +97,9 @@ def detect_query_language(message: str, default_lang: str = "English") -> str:
 
     # 2. Transliteration / Romanized query keywords
     msg_low = message.lower()
-    if any(w in msg_low for w in ["hegide", "male", "naale", "nale", "baratta", "enadru", "agutte", "yenu", "gotta", "tumba"]):
+    if any(w in msg_low for w in ["hegide", "male", "naale", "nale", "baratta", "enadru", "agutte", "yenu", "gotta", "tumba", "hegidhe"]):
         return "Kannada"
-    if any(w in msg_low for w in ["kya", "hoga", "baarish", "aaj", "kal", "mausam", "kaisa", "pehnun", "pani", "kripya"]):
+    if any(w in msg_low for w in ["kya", "hoga", "baarish", "barish", "aaj", "kal", "mausam", "kaisa", "pehnun", "pani", "kripya", "chahiye"]):
         return "Hindi"
     if any(w in msg_low for w in ["eppadi", "mazhai", "varuma", "nalaiku", "enna", "vanilai"]):
         return "Tamil"
@@ -87,14 +110,24 @@ def detect_query_language(message: str, default_lang: str = "English") -> str:
     if any(w in msg_low for w in ["bristi", "hobe", "kemon", "abohawa", "kal"]):
         return "Bengali"
 
+    # 3. If standard English words are used, flexibly return English
+    eng_markers = ["weather", "rain", "tomorrow", "today", "temperature", "forecast", "what", "will", "how", "spray", "outfit", "wear", "dress", "alert", "humidity", "wind", "climate", "can i", "is it"]
+    if any(w in msg_low for w in eng_markers):
+        return "English"
+
     return LANGUAGE_NAMES.get(default_lang, default_lang)
 
 
 def extract_location(message: str) -> str | None:
-    """Extract city/location entity from natural language query."""
+    """Extract city/location entity from natural language query across languages."""
+    # 1. Indic Script Match
+    for indic_name, eng_city in INDIC_CITY_MAP.items():
+        if indic_name in message:
+            return eng_city
+
     text_clean = message.lower()
 
-    # 1. Direct match on known cities, hill stations, and tourist hubs
+    # 2. Direct match on known English cities
     for c in sorted(KNOWN_CITIES, key=len, reverse=True):
         pattern = r"\b" + re.escape(c) + r"\b"
         if re.search(pattern, text_clean):
@@ -102,17 +135,19 @@ def extract_location(message: str) -> str | None:
                 return "Ooty"
             return c.title()
 
-    # 2. Pattern-based location extraction for any village, town, district, or city
+    # 3. Postposition Pattern extraction (e.g., "ಬೆಂಗಳೂರಿನಲ್ಲಿ", "दिल्ली में", "चेन्नई में", "in Delhi")
+    postposition_match = re.search(r'([A-Za-z\u0900-\u0DFF]+?)(?:ನಲ್ಲಿ|ರಲ್ಲಿ|में|யில்|வில்|లో|కి|मध्ये|त|ते|এ|এর)', message)
+    if postposition_match:
+        cand = postposition_match.group(1).strip()
+        if cand in INDIC_CITY_MAP:
+            return INDIC_CITY_MAP[cand]
+
+    # 4. Pattern-based location extraction for any village, town, district, or city
     patterns = [
-        # e.g. "ooty weather for the next 7 days", "manali forecast for 4 days"
         r"^([A-Za-z\s]+?)\s+(?:weather|forecast|rain|temperature|climate|outlook)",
-        # e.g. "ooty 7 days forecast", "ooty 4 days"
         r"^([A-Za-z\s]+?)\s+(?:\d+\s*days?|\d+\s*day\s+forecast)",
-        # e.g. "weather data in ooty for 4days", "weather forecast for wayanad"
         r"(?:weather|forecast|rain|temperature|climate|outlook)(?:\s+data|\s+report|\s+info|\s+information)?\s+(?:in|for|of|at|near)\s+([A-Za-z\s]+?)(?:\s+(?:for\s+\d+|\d+\s*days?|next|upcoming|this|tomorrow|today|now|please)|[\?\.]|$)",
-        # e.g. "what is the weather in ooty", "tell me weather of mysuru"
         r"\b(?:in|for|at|near|of)\s+([A-Za-z\s]+?)(?:\s+(?:for\s+\d+|\d+\s*days?|next|upcoming|this|tomorrow|today|now|please)|[\?\.]|$)",
-        # e.g. "tomorrow in ooty"
         r"\b(?:tomorrow|today|now|tonight)\s+in\s+([A-Za-z\s]+?)(?:\?|\.|$)",
     ]
 
@@ -127,7 +162,6 @@ def extract_location(message: str) -> str | None:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             cand = match.group(1).strip()
-            # Clean stop words
             words = [w for w in cand.split() if w.lower() not in stopwords]
             cand = " ".join(words).strip()
             if len(cand) >= 3:
@@ -139,31 +173,31 @@ def extract_location(message: str) -> str | None:
 
 
 def detect_intent(message: str) -> str:
-    """Classify meteorological query intent."""
+    """Classify meteorological query intent across Indian languages and English."""
     text = message.lower()
 
-    if any(w in text for w in ["outfit", "wear", "dress", "clothing", "cloth", "jacket", "sweater", "shoes", "umbrella", "what should i wear", "what to wear", "kapde", "kya pehnu", "udupu", "dharisi"]):
+    if any(w in text for w in ["outfit", "wear", "dress", "clothing", "cloth", "jacket", "sweater", "shoes", "umbrella", "what should i wear", "what to wear", "kapde", "kya pehnu", "udupu", "dharisi", "ಬಟ್ಟೆ", "ಉಡುಪು", "कपड़े", "पोशाक", "ஆடை", "உடை", "దుస్తులు", "कपडे", "পোশাক"]):
         return "outfit"
 
-    if any(w in text for w in ["spray", "pesticide", "fertilizer", "crop", "farm", "farming", "irrigation", "harvest", "sow", "agriculture", "fasal", "kisan", "beej"]):
+    if any(w in text for w in ["spray", "pesticide", "fertilizer", "crop", "farm", "farming", "irrigation", "harvest", "sow", "agriculture", "fasal", "kisan", "beej", "कीटनाशक", "छिड़काव", "ಕೀಟನಾಶಕ", "ಸಿಂಪಡ", "ಬೆಳೆ", "பூச்சிக்கொல்லி", "పురుగుమందు", "फवारणी", "কীটনাশক"]):
         return "farming_advisory"
 
-    if any(w in text for w in ["flight", "aviation", "pilot", "airport", "metar", "taf", "vfr", "ifr", "runway", "crosswind", "vobl", "vidp"]):
+    if any(w in text for w in ["flight", "aviation", "pilot", "airport", "metar", "taf", "vfr", "ifr", "runway", "crosswind", "vobl", "vidp", "विमान", "ವಿಮಾನ", "வானூர்தಿ"]):
         return "aviation"
 
-    if any(w in text for w in ["marine", "sea", "ocean", "boat", "fish", "fishermen", "coast", "wave", "tsunami", "tide"]):
+    if any(w in text for w in ["marine", "sea", "ocean", "boat", "fish", "fishermen", "coast", "wave", "tsunami", "tide", "समुद्र", "ಸಮುದ್ರ", "ಮೀನುಗಾರ", "கடல்", "సముద్రం"]):
         return "marine"
 
-    if any(w in text for w in ["alert", "warning", "cyclone", "flood", "heatwave", "storm", "lightning", "danger", "hazard", "heavy rain", "emergency"]):
+    if any(w in text for w in ["alert", "warning", "cyclone", "flood", "heatwave", "storm", "lightning", "danger", "hazard", "heavy rain", "emergency", "चेतावनी", "अलर्ट", "ಎಚ್ಚರಿಕೆ", "ಪ್ರವಾಹ", "எச்சரிக்கை", "హెచ్చరిక"]):
         return "weather_alert"
 
-    if any(w in text for w in ["climate", "global warming", "trend", "historical", "anomaly", "past years", "decade", "ipcc"]):
+    if any(w in text for w in ["climate", "global warming", "trend", "historical", "anomaly", "past years", "decade", "ipcc", "जलवायु", "ಹವಾಮಾನ"]):
         return "climate_trend"
 
-    if any(w in text for w in ["rain", "tomorrow", "kal", "naale", "forecast", "next week", "will it", "outlook", "weekly", "days", "exam", "test", "interview", "pariksha", "trip", "travel"]):
+    if any(w in text for w in ["rain", "tomorrow", "kal", "naale", "forecast", "next week", "will it", "outlook", "weekly", "days", "exam", "test", "interview", "pariksha", "trip", "travel", "बारिश", "मಳೆ", "ಬರುತ್ತಾ", "ಬರುತ್ತೆ", "ನಾಳೆ", "மழை", "நாளை", "వర్షం", "రేపు", "पाऊस", "उद्या", "বৃষ্টি", "আগামীকাল"]):
         return "forecast"
 
-    if any(w in text for w in ["air quality", "aqi", "pollution", "pm2.5", "pm10", "smog"]):
+    if any(w in text for w in ["air quality", "aqi", "pollution", "pm2.5", "pm10", "smog", "प्रदूषण", "ಹವೆ"]):
         return "smart_city"
 
     return "current_weather"
@@ -784,7 +818,7 @@ def ask_weathergpt(message: str, current_city: str = "Bengaluru", language: str 
 CORE COMMUNICATION RULES:
 1. Speak naturally, warmly, and like a human friend chatting with the user in everyday simple language.
 2. Do NOT just rattle off raw numbers or robotic bulleted data tables. Always translate numbers into practical, context-aware human life advice.
-3. Automatically match and answer in the {target_lang_name} language (or the language/script the user asked in).
+3. FLEXIBLE MULTILINGUAL ADHERENCE: Reply conversationally in the exact language the user used to ask their question (or in {target_lang_name} using its native script). If the user asked in Hindi, reply in Hindi. If in Kannada, reply in Kannada. If in Tamil, reply in Tamil. If in Telugu, reply in Telugu. If in Marathi, reply in Marathi. If in Bengali, reply in Bengali. If in English, reply in English.
 4. Keep answers clean, concise (2 to 4 sentences, or clean short bullets when recommending multi-day forecasts or outfits), and easy to understand for any citizen.
 5. Provide context-driven guidance based on the query:
    - For CURRENT weather: Warm greeting, current temperature & feel, sky condition, and a practical outing tip (e.g. umbrella, hydration, pleasant walk).
@@ -817,11 +851,18 @@ LIVE METEOROLOGICAL CONTEXT:
 - Agromet Spray Suitability: {advisories.get('agriculture', {}).get('status')}
 - Active Alerts: {[a.get('event') for a in alerts]}"""
 
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=message,
-                config={"system_instruction": system_instruction, "temperature": 0.5},
-            )
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=message,
+                    config={"system_instruction": system_instruction, "temperature": 0.5},
+                )
+            except Exception:
+                response = client.models.generate_content(
+                    model="gemini-3.8-flash",
+                    contents=message,
+                    config={"system_instruction": system_instruction, "temperature": 0.5},
+                )
             if response and response.text:
                 ai_reply = clean_llm_response(response.text)
         except Exception as e:
@@ -831,7 +872,7 @@ LIVE METEOROLOGICAL CONTEXT:
     if not ai_reply and OPENROUTER_API_KEY:
         try:
             prompt = f"""You are WeatherGPT, a friendly, human-like AI weather assistant.
-Respond strictly in {target_lang_name} language. Keep the answer warm, human, concise (2-4 sentences or short clean bullets), and easy to understand with essential data (temperature, condition, rain chance, and a friendly tip). Do not be overly technical.
+Respond conversationally in the exact language the user asked their question in (or in {target_lang_name} using its native script). Keep the answer warm, human, concise (2-4 sentences or short clean bullets), and easy to understand with essential data (temperature, condition, rain chance, and a friendly tip). Do not be overly technical.
 Context:
 - City: {weather_data.get('city')}
 - Current Temp: {weather_data.get('temperature')}°C (Feels {weather_data.get('feels_like')}°C), Condition: {weather_data.get('condition')}, Humidity: {weather_data.get('humidity')}%, Wind: {weather_data.get('wind_speed_kmh')} km/h
@@ -866,7 +907,7 @@ User Query: {message}"""
     # Fallback to intelligent rule-based formatter
     if not ai_reply:
         ai_reply = format_fallback_reply(
-            intent, weather_data, advisories, alerts, language, user_message=message
+            intent, weather_data, advisories, alerts, target_lang_name, user_message=message
         )
 
     return {

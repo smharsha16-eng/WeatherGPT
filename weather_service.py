@@ -911,8 +911,11 @@ def get_live_weather(location: str) -> dict:
                 epa_idx = air_q.get("us-epa-index", 2)
                 aqi_status = "Good" if epa_idx == 1 else ("Moderate" if epa_idx == 2 else ("Unhealthy for Sensitive Groups" if epa_idx == 3 else "Unhealthy"))
 
+                primary_city = res_name.split(",")[0].strip() if res_name else loc.get("name", location)
+                resolved_city = primary_city if primary_city and not any(ch.isdigit() for ch in primary_city) else loc.get("name", location)
+
                 return {
-                    "city": loc.get("name", res_name),
+                    "city": resolved_city,
                     "region": loc.get("region", ""),
                     "country": loc.get("country", country),
                     "lat": loc.get("lat", lat),
