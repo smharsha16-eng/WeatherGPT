@@ -1,6 +1,28 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from "@vis.gl/react-google-maps";
 import { getTranslation, translateCondition, translateDay } from "../utils/translations";
+
+class MapErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.warn("MapErrorBoundary caught Google Maps error:", error, errorInfo);
+    if (this.props.onError) {
+      this.props.onError(error);
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || null;
+    }
+    return this.props.children;
+  }
+}
 
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
@@ -35,6 +57,9 @@ export default function WeatherMapPage({
   });
   const [keyInput, setKeyInput] = useState(apiKey);
   const [showKeyConfig, setShowKeyConfig] = useState(false);
+  const [gmpError, setGmpError] = useState(false);
+
+  const isGoogleMapsActive = Boolean(apiKey) && !gmpError;
 
   // Map state
   const [selectedCoords, setSelectedCoords] = useState({ lat: 12.9716, lng: 77.5946 });
@@ -385,22 +410,58 @@ export default function WeatherMapPage({
   const handleSaveApiKey = () => {
     const trimmed = keyInput.trim();
     setApiKey(trimmed);
+    setGmpError(false);
     localStorage.setItem("weathergpt_gmp_key", trimmed);
     setShowKeyConfig(false);
-    setToastMessage(trimmed ? "Google Maps API Key saved successfully!" : "API Key cleared.");
+    setToastMessage(trimmed ? "Google Maps API Key saved successfully!" : "API Key cleared. Using Leaflet GIS Map.");
   };
+
+  // Intercept Google Maps authentication/referer failures
+  useEffect(() => {
+    const prevAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      console.warn("Google Maps auth failed (unauthorized domain / quota). Falling back to Leaflet GIS Map.");
+      setGmpError(true);
+      if (typeof prevAuthFailure === "function") {
+        try {
+          prevAuthFailure();
+        } catch (e) {}
+      }
+    };
+
+    const handleGlobalError = (event) => {
+      const msg = event?.message || "";
+      const src = event?.filename || "";
+      if (
+        msg.includes("Google Maps") ||
+        src.includes("maps.googleapis.com") ||
+        msg.includes("gm_authFailure") ||
+        src.includes("react-google-maps")
+      ) {
+        console.warn("Google Maps script/runtime error intercepted:", msg || src);
+        setGmpError(true);
+      }
+    };
+
+    window.addEventListener("error", handleGlobalError);
+
+    return () => {
+      window.gm_authFailure = prevAuthFailure;
+      window.removeEventListener("error", handleGlobalError);
+    };
+  }, []);
 
   // Google Maps Leaflet initialization with high-resolution Google Terrain / Roadmap / Satellite tiles
   useEffect(() => {
-    if (apiKey) return; // Google Maps JS API active
+    if (isGoogleMapsActive) return; // Google Maps JS API active
 
     const container = document.getElementById("leaflet-fallback-container");
     if (!container || !window.L) return;
 
     if (!leafletMapRef.current) {
       const map = window.L.map("leaflet-fallback-container", {
-        center: [21.0, 78.9629],
-        zoom: 5,
+        center: [mapCenter.lat, mapCenter.lng],
+        zoom: mapZoom || 5,
         minZoom: 3,
         maxZoom: 20,
         zoomControl: false, // We provide authentic Google Maps styled zoom controls
@@ -416,7 +477,7 @@ export default function WeatherMapPage({
       tileLayerRef.current = initialTileLayer;
 
       const marker = window.L.marker([selectedCoords.lat, selectedCoords.lng], {
-        icon: createGooglePin(false),
+        icon: createGooglePin(Boolean(severeAlert)),
       }).addTo(map);
 
       marker.bindPopup(`
@@ -442,6 +503,12 @@ export default function WeatherMapPage({
 
       leafletMapRef.current = map;
       leafletMarkerRef.current = marker;
+
+      setTimeout(() => {
+        try {
+          map.invalidateSize();
+        } catch (e) {}
+      }, 100);
     }
 
     return () => {
@@ -452,11 +519,11 @@ export default function WeatherMapPage({
         tileLayerRef.current = null;
       }
     };
-  }, [apiKey]);
+  }, [isGoogleMapsActive]);
 
   // Tile layer updater when mapLayer switches
   useEffect(() => {
-    if (leafletMapRef.current && window.L && !apiKey) {
+    if (leafletMapRef.current && window.L && !isGoogleMapsActive) {
       if (tileLayerRef.current) {
         leafletMapRef.current.removeLayer(tileLayerRef.current);
       }
@@ -467,7 +534,7 @@ export default function WeatherMapPage({
       }).addTo(leafletMapRef.current);
       tileLayerRef.current = newLayer;
     }
-  }, [mapLayer, apiKey]);
+  }, [mapLayer, isGoogleMapsActive]);
 
   // Determine rain probability & condition for outgoing suggestion
   const rainProbability =
@@ -506,7 +573,7 @@ export default function WeatherMapPage({
               onClick={() => setShowKeyConfig(!showKeyConfig)}
               style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "6px" }}
             >
-              ⚙️ {apiKey ? "Google Maps: Active" : t.mapConfigBtn}
+              ⚙️ {isGoogleMapsActive ? "Google Maps: Active" : "Interactive GIS Map"}
             </button>
             <button
               className="refresh-btn"
@@ -1108,51 +1175,63 @@ export default function WeatherMapPage({
 
         {/* Map Rendering Container */}
         <div style={{ width: "100%", height: "100%" }}>
-          {apiKey ? (
-            <APIProvider apiKey={apiKey} libraries={["places"]}>
-              <Map
-                center={mapCenter}
-                zoom={mapZoom}
-                onCenterChanged={(e) => setMapCenter(e.detail.center)}
-                onZoomChanged={(e) => setMapZoom(e.detail.zoom)}
-                onClick={handleGoogleMapClick}
-                mapId="DEMO_MAP_ID"
-                internalUsageAttributionIds={["gmp_git_agentskills_v1"]}
-                style={{ width: "100%", height: "100%" }}
-                gestureHandling="greedy"
-                disableDefaultUI={false}
+          {isGoogleMapsActive ? (
+            <MapErrorBoundary
+              onError={() => setGmpError(true)}
+              fallback={<div id="leaflet-fallback-container" style={{ width: "100%", height: "100%" }} />}
+            >
+              <APIProvider
+                apiKey={apiKey}
+                libraries={["places"]}
+                onError={(err) => {
+                  console.warn("Google Maps APIProvider failed:", err);
+                  setGmpError(true);
+                }}
               >
-                <AdvancedMarker position={selectedCoords} onClick={() => setShowInfoWindow(true)}>
-                  <Pin
-                    background={severeAlert ? "#ef4444" : "var(--primary)"}
-                    glyphColor="#ffffff"
-                    borderColor={severeAlert ? "#b91c1c" : "#ffffff"}
-                  />
-                </AdvancedMarker>
+                <Map
+                  center={mapCenter}
+                  zoom={mapZoom}
+                  onCenterChanged={(e) => setMapCenter(e.detail.center)}
+                  onZoomChanged={(e) => setMapZoom(e.detail.zoom)}
+                  onClick={handleGoogleMapClick}
+                  mapId="DEMO_MAP_ID"
+                  internalUsageAttributionIds={["gmp_git_agentskills_v1"]}
+                  style={{ width: "100%", height: "100%" }}
+                  gestureHandling="greedy"
+                  disableDefaultUI={false}
+                >
+                  <AdvancedMarker position={selectedCoords} onClick={() => setShowInfoWindow(true)}>
+                    <Pin
+                      background={severeAlert ? "#ef4444" : "var(--primary)"}
+                      glyphColor="#ffffff"
+                      borderColor={severeAlert ? "#b91c1c" : "#ffffff"}
+                    />
+                  </AdvancedMarker>
 
-                {showInfoWindow && (
-                  <InfoWindow
-                    position={selectedCoords}
-                    onCloseClick={() => setShowInfoWindow(false)}
-                    headerContent={<strong style={{ color: severeAlert ? "#dc2626" : "#0d2138", fontSize: "14px" }}>📍 {selectedName}</strong>}
-                  >
-                    <div style={{ color: "#1f2937", padding: "4px", fontSize: "13px", lineHeight: "1.6", minWidth: "190px" }}>
-                      {severeAlert && (
-                        <div style={{ background: "#fee2e2", border: "1px solid #f87171", color: "#991b1b", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-                          🚨 {severeAlert.event}
+                  {showInfoWindow && (
+                    <InfoWindow
+                      position={selectedCoords}
+                      onCloseClick={() => setShowInfoWindow(false)}
+                      headerContent={<strong style={{ color: severeAlert ? "#dc2626" : "#0d2138", fontSize: "14px" }}>📍 {selectedName}</strong>}
+                    >
+                      <div style={{ color: "#1f2937", padding: "4px", fontSize: "13px", lineHeight: "1.6", minWidth: "190px" }}>
+                        {severeAlert && (
+                          <div style={{ background: "#fee2e2", border: "1px solid #f87171", color: "#991b1b", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                            🚨 {severeAlert.event}
+                          </div>
+                        )}
+                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e40af", marginBottom: "4px" }}>
+                          {weatherData?.temperature !== undefined ? `${weatherData.temperature}°C` : "Loading..."} • {weatherData?.condition || "Live"}
                         </div>
-                      )}
-                      <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e40af", marginBottom: "4px" }}>
-                        {weatherData?.temperature !== undefined ? `${weatherData.temperature}°C` : "Loading..."} • {weatherData?.condition || "Live"}
+                        <div>💧 Humidity: <strong>{weatherData?.humidity ?? "--"}%</strong></div>
+                        <div>🌧️ Rain Probability: <strong>{rainProbability}%</strong></div>
+                        <div>💨 Wind Speed: <strong>{weatherData?.wind_speed_kmh ?? "--"} km/h</strong></div>
                       </div>
-                      <div>💧 Humidity: <strong>{weatherData?.humidity ?? "--"}%</strong></div>
-                      <div>🌧️ Rain Probability: <strong>{rainProbability}%</strong></div>
-                      <div>💨 Wind Speed: <strong>{weatherData?.wind_speed_kmh ?? "--"} km/h</strong></div>
-                    </div>
-                  </InfoWindow>
-                )}
-              </Map>
-            </APIProvider>
+                    </InfoWindow>
+                  )}
+                </Map>
+              </APIProvider>
+            </MapErrorBoundary>
           ) : (
             <div id="leaflet-fallback-container" style={{ width: "100%", height: "100%" }} />
           )}

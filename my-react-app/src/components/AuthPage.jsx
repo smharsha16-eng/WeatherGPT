@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8000" : "");
+const API_BASE = import.meta.env.VITE_API_BASE || (
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+  window.location.port !== "8000"
+    ? `http://${window.location.hostname}:8000`
+    : ""
+);
 
 const COUNTRY_CODES = [
   { code: "+91", country: "India (IN)", flag: "🇮🇳" },
@@ -101,7 +107,17 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false, the
         }),
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error(
+          res.ok
+            ? "Unexpected response format from server."
+            : `Server returned error (${res.status}). Please ensure backend is running on port 8000.`
+        );
+      }
+
       if (!res.ok) {
         throw new Error(data.detail || "Failed to sign in with mobile number.");
       }
@@ -142,7 +158,17 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false, the
         }),
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error(
+          res.ok
+            ? "Unexpected response format from server."
+            : `Server returned error (${res.status}). Please ensure backend is running on port 8000.`
+        );
+      }
+
       if (!res.ok) {
         throw new Error(data.detail || "Google authentication failed.");
       }
@@ -183,7 +209,17 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false, the
         body: JSON.stringify({ email: cleanEmail }),
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error(
+          res.ok
+            ? "Unexpected response format from server."
+            : `Server returned error (${res.status}). Please ensure backend is running on port 8000.`
+        );
+      }
+
       if (!res.ok) throw new Error(data.detail || "Failed to send email code.");
 
       setStep("otp");
@@ -228,7 +264,17 @@ export default function AuthPage({ onLoginSuccess, onClose, isModal = false, the
         }),
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error(
+          res.ok
+            ? "Unexpected response format from server."
+            : `Server returned error (${res.status}). Please ensure backend is running on port 8000.`
+        );
+      }
+
       if (!res.ok) {
         setAttempts((prev) => prev + 1);
         throw new Error(data.detail || "Invalid code.");

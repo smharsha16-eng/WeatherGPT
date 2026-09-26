@@ -24,13 +24,36 @@ export {
 
 export const LANG_CODE_MAP = {
   English: "en-IN",
+  "en-IN": "en-IN",
   "हिन्दी": "hi-IN",
+  Hindi: "hi-IN",
+  "hi-IN": "hi-IN",
   "ಕನ್ನಡ": "kn-IN",
+  Kannada: "kn-IN",
+  "kn-IN": "kn-IN",
   "தமிழ்": "ta-IN",
+  Tamil: "ta-IN",
+  "ta-IN": "ta-IN",
   "తెలుగు": "te-IN",
+  Telugu: "te-IN",
+  "te-IN": "te-IN",
   "मराठी": "mr-IN",
+  Marathi: "mr-IN",
+  "mr-IN": "mr-IN",
   "বাংলা": "bn-IN",
+  Bengali: "bn-IN",
+  "bn-IN": "bn-IN",
 };
+
+export const SUPPORTED_LANGUAGES = [
+  { key: "English", label: "English", code: "en-IN" },
+  { key: "हिन्दी", label: "हिन्दी (Hindi)", code: "hi-IN" },
+  { key: "ಕನ್ನಡ", label: "ಕನ್ನಡ (Kannada)", code: "kn-IN" },
+  { key: "தமிழ்", label: "தமிழ் (Tamil)", code: "ta-IN" },
+  { key: "తెలుగు", label: "తెలుగు (Telugu)", code: "te-IN" },
+  { key: "मराठी", label: "मराठी (Marathi)", code: "mr-IN" },
+  { key: "বাংলা", label: "বাংলা (Bengali)", code: "bn-IN" },
+];
 
 export const TRANSLATIONS = {
   English: {
@@ -3982,25 +4005,124 @@ const COMMON_BOT_ERRORS = {
   },
 };
 
+export const QUESTION_TYPES = ["rain", "spray", "outfit", "weather", "alerts", "aviation", "climate"];
+
+export function getLocalizedQuestion(type, city = "Bengaluru", language = "English") {
+  const map = {
+    rain: {
+      English: `Will it rain tomorrow in ${city}?`,
+      "हिन्दी": `क्या कल ${city} में बारिश होगी?`,
+      "ಕನ್ನಡ": `ನಾಳೆ ${city} ನಲ್ಲಿ ಮಳೆ ಬರುತ್ತಾ?`,
+      "தமிழ்": `நாளை ${city} யில் மழை வருமா?`,
+      "తెలుగు": `రేపు ${city} లో వర్షం పడుతుందా?`,
+      "मराठी": `उद्या ${city} मध्ये पाऊस पडेल का?`,
+      "বাংলা": `কাল কি ${city}-তে বৃষ্টি হবে?`,
+    },
+    spray: {
+      English: `Can I spray pesticides in ${city} tomorrow?`,
+      "हिन्दी": `क्या मैं कल ${city} में कीटनाशक छिड़काव कर सकता हूँ?`,
+      "ಕನ್ನಡ": `ನಾಳೆ ${city} ನಲ್ಲಿ ಕೀಟನಾಶಕ ಸಿಂಪಡಿಸಬಹುದೇ?`,
+      "தமிழ்": `நாளை ${city} யில் பூச்சிக்கொல்லಿ மருந்து தெளிக்கலாமா?`,
+      "తెలుగు": `రేపు ${city} లో పురుగుమందుల పిచికారీ చేయవచ్చా?`,
+      "मराठी": `उद्या ${city} मध्ये कीटकनाशक फवारणी करता येईल का?`,
+      "বাংলা": `কাল ${city}-তে কি কীটনাশক স্প্রে করা যাবে?`,
+    },
+    outfit: {
+      English: `What should I wear tomorrow in ${city}?`,
+      "हिन्दी": `कल ${city} में मौसम के अनुसार क्या पहनना सही रहेगा?`,
+      "ಕನ್ನಡ": `ನಾಳೆ ${city} ನಲ್ಲಿ ಯಾವ ಉಡುಪು ಧರಿಸಬೇಕು?`,
+      "தமிழ்": `நாளை ${city} யில் என்ன ஆடை அணியலாம்?`,
+      "తెలుగు": `రేపు ${city} లో ఏ దుస్తులు వేసుకోవాలి?`,
+      "मराठी": `उद्या ${city} मध्ये कोणते कपडे घालावे?`,
+      "বাংলা": `কাল ${city}-তে কী জামাকাপড় পরা উচিত?`,
+    },
+    weather: {
+      English: `What is the weather in ${city}?`,
+      "हिन्दी": `${city} का मौसम कैसा है?`,
+      "ಕನ್ನಡ": `${city} ನ ಹವಾಮಾನ ಹೇಗಿದೆ?`,
+      "தமிழ்": `${city} வானிலை நிலவரம் என்ன?`,
+      "తెలుగు": `${city} లో వాతావరణం ఎలా ఉంది?`,
+      "मराठी": `${city} चे हवामान कसे आहे?`,
+      "বাংলা": `${city}-র আবহাওয়া কেমন?`,
+    },
+    alerts: {
+      English: `Are there any active cyclone, flood, or heatwave alerts?`,
+      "हिन्दी": `क्या कोई सक्रिय चक्रवात, बाढ़ या लू का अलर्ट है?`,
+      "ಕನ್ನಡ": `ಯಾವುದಾದರೂ ಸಕ್ರಿಯ ಚಂಡಮಾರುತ ಅಥವಾ ಪ್ರವಾಹ ಎಚ್ಚರಿಕೆ ಇದೆಯೇ?`,
+      "தமிழ்": `ஏதேனும் தீவிர புயல் அல்லது வெள்ள எச்சரிக்கை உள்ளதா?`,
+      "తెలుగు": `ఏవైనా తుఫాను లేదా వరద హెచ్చరికలు ఉన్నాయా?`,
+      "मराठी": `काही सक्रिय चक्रीवादळ किंवा पुराचा इशारा आहे का?`,
+      "বাংলা": `কোনো সক্রিয় ঘূর্ণিঝড় বা বন্যার সতর্কতা আছে কি?`,
+    },
+    aviation: {
+      English: `What is the aviation METAR briefing for VOBL?`,
+      "हिन्दी": `VOBL के लिए विमानन METAR ब्रीफिंग क्या है?`,
+      "ಕನ್ನಡ": `VOBL ಗಾಗಿ ವಾಯುಯಾನ METAR ಬ್ರೀಫಿಂಗ್ ಏನು?`,
+      "தமிழ்": `VOBL விமான போக்குவரத்து METAR தகவல் என்ன?`,
+      "తెలుగు": `VOBL కోసం ఏవియేషన్ METAR బ్రీఫింగ్ ఏమిటి?`,
+      "मराठी": `VOBL साठी एव्हिएशन METAR ब्रीफिंग काय आहे?`,
+      "বাংলা": `VOBL-এর জন্য বিমান চলাচল METAR ব্রিফিং কী?`,
+    },
+    climate: {
+      English: `What are the climate trends and temperature anomalies in ${city}?`,
+      "हिन्दी": `${city} में जलवायु के रुझान और तापमान विसंगतियां क्या हैं?`,
+      "ಕನ್ನಡ": `${city} ನಲ್ಲಿ ಹವಾಮಾನ ಪ್ರವೃತ್ತಿಗಳು ಮತ್ತು ತಾಪಮಾನ ವ್ಯತ್ಯಾಸಗಳೇನು?`,
+      "தமிழ்": `${city} காலநிலை போக்குகள் மற்றும் வெப்பநிலை மாற்றங்கள் என்ன?`,
+      "తెలుగు": `${city} లో వాతావరణ ధోరణులు మరియు ఉష్ಣోగ్రత క్రమరాహిత్యాలు ఏమిటి?`,
+      "मराठी": `${city} मधील हवामान ट्रेंड आणि तापमान विसंगती काय आहेत?`,
+      "বাংলা": `${city}-তে জলবায়ু প্রবণতা এবং তাপমাত্রার অসঙ্গতি কী?`,
+    },
+  };
+  return map[type]?.[language] || map[type]?.["English"] || `What is the weather in ${city}?`;
+}
+
+export function translateUserQuestion(text, targetLanguage = "English") {
+  if (!text || typeof text !== "string") return text || "";
+  const tLower = text.toLowerCase();
+
+  // Extract city entity if specified
+  let city = "Bengaluru";
+  const cityMatch = text.match(/(?:in|for|में|ನಲ್ಲಿ|யில்|లో|मध्ये|তে)\s+([A-Za-z\u0900-\u0DFF]+)/i);
+  if (cityMatch) {
+    city = cityMatch[1].replace(/[?,.!]/g, "").trim();
+  }
+
+  if (tLower.includes("rain") || tLower.includes("बारिश") || tLower.includes("ಮಳೆ") || tLower.includes("மழை") || tLower.includes("వర్షం") || tLower.includes("पाऊस") || tLower.includes("বৃষ্টি")) {
+    return getLocalizedQuestion("rain", city, targetLanguage);
+  }
+  if (tLower.includes("spray") || tLower.includes("pesticide") || tLower.includes("कीटनाशक") || tLower.includes("ಕೀಟನಾಶಕ") || tLower.includes("பூச்சிக்கொல்லி") || tLower.includes("పురుగుమందు") || tLower.includes("फवारणी") || tLower.includes("কীটনাশক")) {
+    return getLocalizedQuestion("spray", city, targetLanguage);
+  }
+  if (tLower.includes("wear") || tLower.includes("outfit") || tLower.includes("पहन") || tLower.includes("ಉಡುಪು") || tLower.includes("ಬಟ್ಟೆ") || tLower.includes("ஆடை") || tLower.includes("దుస్తులు") || tLower.includes("कपडे") || tLower.includes("পোশাক")) {
+    return getLocalizedQuestion("outfit", city, targetLanguage);
+  }
+  if (tLower.includes("alert") || tLower.includes("cyclone") || tLower.includes("flood") || tLower.includes("आपदा") || tLower.includes("ವಿಪತ್ತು") || tLower.includes("பேரிடர்") || tLower.includes("తుఫాను") || tLower.includes("आपत्ती") || tLower.includes("দুর্যোগ")) {
+    return getLocalizedQuestion("alerts", city, targetLanguage);
+  }
+  if (tLower.includes("aviation") || tLower.includes("metar") || tLower.includes("vobl") || tLower.includes("विमानन") || tLower.includes("ವಾಯುಯಾನ")) {
+    return getLocalizedQuestion("aviation", city, targetLanguage);
+  }
+  if (tLower.includes("climate") || tLower.includes("anomal") || tLower.includes("trend") || tLower.includes("जलवायु") || tLower.includes("ಪ್ರವೃತ್ತಿ")) {
+    return getLocalizedQuestion("climate", city, targetLanguage);
+  }
+  if (tLower.includes("weather") || tLower.includes("temperature") || tLower.includes("मौसम") || tLower.includes("ಹವಾಮಾನ") || tLower.includes("வானிலை") || tLower.includes("వాతావరణం") || tLower.includes("हवामान") || tLower.includes("আবহাওয়া")) {
+    return getLocalizedQuestion("weather", city, targetLanguage);
+  }
+  return text;
+}
+
 export function translateChatMessage(text, language = "English") {
   if (!text || typeof text !== "string") return text || "";
-  if (language === "English") {
-    // If it's welcome in another language, return English welcome
-    if (text.includes("WeatherGPT") && (text.includes("•") || text.includes("नमस्ते") || text.includes("ನಮಸ್ಕಾರ") || text.includes("வணக்கம்") || text.includes("నమస్కారం") || text.includes("नमस्कार") || text.includes("নমস্কার"))) {
-      return getChatWelcomeMessage("English");
-    }
-  }
 
   // 1. Welcome Message
   if (
     text.includes("WeatherGPT") &&
     (text.includes("conversational AI") ||
       text.includes("Ask me anything") ||
-      text.includes("সংவாதாत्मक") ||
+      text.includes("संवादात्मक") ||
       text.includes("ಸಂವಾದಾತ್ಮಕ") ||
       text.includes("உரையாடல்") ||
       text.includes("సంభాషణాత్మక") ||
-      text.includes("संवादात्मक") ||
       text.includes("ইন্টারেক্টিভ") ||
       text.includes("• Real-time weather") ||
       text.includes("• वास्तविक समय") ||
@@ -4021,21 +4143,54 @@ export function translateChatMessage(text, language = "English") {
     return COMMON_BOT_ERRORS.offline_sensor[language] || text;
   }
 
-  // 3. Current Live Weather Pattern match across languages
-  // Matches e.g. **Bengaluru, Karnataka** ... **22.2°C** ... **83%** ... **13.9 km/h**
-  const liveMatch = text.match(/\*\*([^*]+)\*\*.*?(\d+(?:\.\d+)?)\s*°C.*?(?:महसूस|feels like|ಅನಿಸಿಕೆ|உணர்வு|అనిపించేది|जाणवणारे|অনুভূত)\s*(\d+(?:\.\d+)?)\s*°C.*?(?:नमी|Humidity|ತೇವಾಂಶ|ஈரப்பதம்|తేమ|आर्द्रता|আর্দ্রতা).*?(\d+)%.*?(\d+(?:\.\d+)?)\s*km\/h/is);
-  if (liveMatch) {
-    const loc = liveMatch[1];
-    const temp = liveMatch[2];
-    const feels = liveMatch[3];
-    const hum = liveMatch[4];
-    const wind = liveMatch[5];
+  // 3. Outfit recommendation translation
+  if (text.includes("👔") || text.includes("आउटफिट") || text.includes("ಉಡುಪು") || text.includes("உடை") || text.includes("దుస్తుల") || text.includes("कपड्यांचा") || text.includes("পোশাকের")) {
+    const locMatch = text.match(/\*\*([^*]+)\*\*/);
+    const loc = locMatch ? locMatch[1].replace(/[^\w\s\u0900-\u0DFF]/g, "").trim() : "Bengaluru";
+    const tempMatch = text.match(/(\d+(?:\.\d+)?)\s*°C/);
+    const temp = tempMatch ? tempMatch[1] : "26";
+
+    const outfitTexts = {
+      English: `👔 **Outfit & Style Guide for ${loc}:**\n\nWith expected temperatures around **${temp}°C**, comfortable lightweight cotton clothing, breathable layers, and comfortable walking shoes are recommended. If rain is expected, carry an umbrella!`,
+      "हिन्दी": `👔 **${loc} के लिए परिधान एवं पोशाक सुझाव:**\n\nलगभग **${temp}°C** तापमान के साथ, आरामदायक हल्के सूती कपड़े और चलने के लिए सहज जूते पहनना सही रहेगा। यदि बारिश की संभावना हो तो छाता अवश्य साथ रखें!`,
+      "ಕನ್ನಡ": `👔 **${loc} ಗಾಗಿ ಉಡುಪು ಮತ್ತು ಶೈಲಿ ಸಲಹೆ:**\n\nಅಂದಾಜು **${temp}°C** ತಾಪಮಾನವಿರುವುದರಿಂದ, ಹಿತಕರವಾದ ಹತ್ತಿ ಬಟ್ಟೆಗಳು, ಲಘು ಪದರಗಳು ಮತ್ತು ಆರಾಮದಾಯಕ ಪಾದರಕ್ಷೆಗಳು ಸೂಕ್ತವಾಗಿವೆ. ಮಳೆ ಸಾಧ್ಯತೆಯಿದ್ದರೆ ಛತ್ರಿ ಕೊಂಡೊಯ್ಯಿರಿ!`,
+      "தமிழ்": `👔 **${loc} உடை மற்றும் ஆடை பரிந்துரை:**\n\nசுமார் **${temp}°C** வெப்பநிலை நிலவுவதால், வசதியான பருத்தி ஆடைகள் மற்றும் லேசான மேலாடைகள் பரிந்துரைக்கப்படுகின்றன. மழை வாய்ப்பு இருந்தால் குடை எடுத்துச் செல்லவும்!`,
+      "తెలుగు": `👔 **${loc} లో దుస్తుల మరియు శైలి సలహా:**\n\nదాదాపు **${temp}°C** ఉష్ణోగ్రత ఉన్నందున, తేలికపాటి కాటన్ దుస్తులు మరియు సౌకర్యవంతమైన బూట్లు అనుకూలంగా ఉంటాయి. వర్షం పడే అవకాశం ఉంటే గొడుగు తీసుకెళ్లండి!`,
+      "मराठी": `👔 **${loc} साठी कपड्यांचा सल्ला:**\n\nअंदाजे **${temp}°C** तापमानासाठी आरामदायक सुती कपडे आणि हलकी लेयर घालणे उत्तम राहील. पाऊस असल्यास छत्री सोबत ठेवा!`,
+      "বাংলা": `👔 **${loc}-র জন্য পোশাকের পরামর্শ:**\n\nআনুমানিক **${temp}°C** তাপমাত্রায় আরামদায়ক সুতি পোশাক এবং সুবিধাজনক জুতো পরা উপযুক্ত। বৃষ্টির সম্ভাবনা থাকলে ছাতা সঙ্গে রাখুন!`,
+    };
+    return outfitTexts[language] || outfitTexts["English"];
+  }
+
+  // 4. Pesticide spray advice translation
+  if (text.includes("🌾") || text.includes("कीटनाशक") || text.includes("ಕೀಟನಾಶಕ") || text.includes("பூச்சிக்கொல்லி") || text.includes("పురుగుమందు") || text.includes("फवारणी") || text.includes("কীটনাশক")) {
+    const locMatch = text.match(/\*\*([^*]+)\*\*/);
+    const loc = locMatch ? locMatch[1].replace(/[^\w\s\u0900-\u0DFF]/g, "").trim() : "Bengaluru";
+
+    const sprayTexts = {
+      English: `🌾 **Agromet Advisory for ${loc}:**\n\nPesticide spraying is generally favorable during dry hours with wind speeds below 15 km/h. Ensure leaves are dry before application and avoid spraying if showers are imminent.`,
+      "हिन्दी": `🌾 **${loc} के लिए कृषि परामर्श (कीटनाशक छिड़काव):**\n\n15 किमी/घंटा से कम हवा की गति और शुष्क मौसम में कीटनाशक छिड़काव करना सबसे उपयुक्त है। बारिश की संभावना होने पर छिड़काव टालें।`,
+      "ಕನ್ನಡ": `🌾 **${loc} ಗಾಗಿ ಕೃಷಿ ಸಲಹೆ (ಕೀಟನಾಶಕ ಸಿಂಪಡಣೆ):**\n\nಗಾಳಿಯ ವೇಗ ಗಂಟೆಗೆ 15 ಕಿ.ಮೀ ಗಿಂತ ಕಡಿಮೆಯಿದ್ದಾಗ ಮತ್ತು ಶುಷ್ಕ ವಾತಾವರಣವಿದ್ದಾಗ ಕೀಟನಾಶಕ ಸಿಂಪಡಿಸುವುದು ಸೂಕ್ತ. ಮಳೆಯ ಮುನ್ಸೂಚನೆ ಇದ್ದರೆ ಸಿಂಪಡಿಸಬೇಡಿ.`,
+      "தமிழ்": `🌾 **${loc} விவசாய ஆலோசனை (பூச்சிக்கொல்லி தெளிப்பு):**\n\nகாற்றின் வேகம் 15 கி.மீ/மணிக்கு குறைவாக உள்ள உலர்ந்த நேரத்தில் பூச்சிக்கொல்லி தெளிப்பது நல்லது. மழை எதிர்பார்க்கப்பட்டால் தெளிப்பதைத் தவிர்க்கவும்.`,
+      "తెలుగు": `🌾 **${loc} వ్యవసాయ సలహా (పురుగుమందుల పిచికారీ):**\n\nగాలి వేగం 15 కి.మీ/గం కంటే తక్కువ ఉన్నప్పుడు పురుగుమందుల పిచికారీ అనుకూలం. వర్షం సూచన ఉంటే పిచికారీని వాయిదా వేయండి.`,
+      "मराठी": `🌾 **${loc} साठी कृषी सल्ला (कीटकनाशक फवारणी):**\n\nवाऱ्याचा वेग 15 किमी/तास पेक्षा कमी असताना कीटकनाशक फवारणी अनुकूल ठरते. पाऊस पडण्याची शक्यता असल्यास फवारणी टाळा.`,
+      "বাংলা": `🌾 **${loc}-র জন্য কৃষি পরামর্শ (কীটনাশক স্প্রে):**\n\nবাতাসের গতিবেগ ১৫ কিমি/ঘণ্টার কম হলে কীটনাশক স্প্রে করা নিরাপদ। বৃষ্টির সম্ভাবনা থাকলে স্প্রে করা স্থগিত রাখুন।`,
+    };
+    return sprayTexts[language] || sprayTexts["English"];
+  }
+
+  // 5. Current Live Weather Pattern match across languages
+  const liveMatch = text.match(/\*\*([^*]+)\*\*.*?(\d+(?:\.\d+)?)\s*°C.*?(?:महसूस|feels like|ಅನಿಸಿಕೆ|உணர்வு|అనిపించేది|जाणवणारे|অনুভূত)?\s*(\d+(?:\.\d+)?)?\s*°C?/is);
+  if (liveMatch && (text.includes("°C") || text.includes("km/h") || text.includes("%"))) {
+    const loc = liveMatch[1].replace(/[^\w\s\u0900-\u0DFF]/g, "").trim();
+    const temp = liveMatch[2] || "25";
+    const feels = liveMatch[3] || temp;
 
     // Detect condition
-    let cond = "Clear";
-    const condMatch = text.match(/\*\*([A-Za-z\s]+)\*\*\s*(?:है|is|ಆಗಿದ್ದು|ஆகவும்|గా ఉంది|असून|এবং)/i);
-    if (condMatch) {
-      cond = condMatch[1].trim();
+    let cond = "Partly Cloudy";
+    const condMatch = text.match(/\*\*([A-Za-z\s]+)\*\*/g);
+    if (condMatch && condMatch.length > 1) {
+      cond = condMatch[1].replace(/\*/g, "").trim();
     }
     const condTr = translateCondition(cond, language);
 
@@ -4045,60 +4200,56 @@ export function translateChatMessage(text, language = "English") {
       tip = COMMON_BOT_TIPS.umbrella[language] || "";
     } else if (text.includes("पानी") || text.includes("water") || text.includes("ನೀರು") || text.includes("தண்ணீர்") || text.includes("ఎండ") || text.includes("ऊन")) {
       tip = COMMON_BOT_TIPS.heat[language] || "";
-    } else if (text.includes("सुहावना") || text.includes("pleasant") || text.includes("ಹಿತಕರ") || text.includes("இதமாக") || text.includes("ఆహ్లాదకర") || text.includes("आल्हाददायक") || text.includes("মনোরম")) {
+    } else {
       tip = COMMON_BOT_TIPS.pleasant[language] || "";
-    } else if (text.includes("ठंड") || text.includes("cold") || text.includes("jacket") || text.includes("sweater") || text.includes("ಚಳಿ")) {
-      tip = COMMON_BOT_TIPS.cold[language] || "";
     }
 
     if (language === "हिन्दी") {
-      return `**${loc}** में अभी मौसम **${condTr}** है और तापमान **${temp}°C** है (महसूस ${feels}°C)। नमी लगभग **${hum}%** है और **${wind} km/h** की हवा चल रही है।\n\n${tip}`;
+      return `🌡️ **${loc}** में अभी मौसम **${condTr}** है और तापमान **${temp}°C** है (महसूस ${feels}°C)।\n\n${tip}`;
     }
     if (language === "ಕನ್ನಡ") {
-      return `**${loc}** ನಲ್ಲಿ ಪ್ರಸ್ತುತ ಹವಾಮಾನ **${condTr}** ಆಗಿದ್ದು, ತಾಪಮಾನ **${temp}°C** ಇದೆ (ಅನಿಸಿಕೆ ${feels}°C). ತೇವಾಂಶ ಸುಮಾರು **${hum}%** ಮತ್ತು **${wind} km/h** ವೇಗದಲ್ಲಿ ಗಾಳಿ ಬೀಸುತ್ತಿದೆ.\n\n${tip}`;
+      return `🌡️ **${loc}** ನಲ್ಲಿ ಪ್ರಸ್ತುತ ಹವಾಮಾನ **${condTr}** ಆಗಿದ್ದು, ತಾಪಮಾನ **${temp}°C** ಇದೆ (ಅನಿಸಿಕೆ ${feels}°C).\n\n${tip}`;
     }
     if (language === "தமிழ்") {
-      return `தற்போது **${loc}**-ல் வானிலை **${condTr}**-ஆகவும், வெப்பநிலை **${temp}°C** ஆகவும் உள்ளது (உணர்வு ${feels}°C). ஈரப்பதம் **${hum}%**, காற்று **${wind} km/h** வேகத்தில் வீசுகிறது.\n\n${tip}`;
+      return `🌡️ தற்போது **${loc}**-ல் வானிலை **${condTr}**-ஆகவும், வெப்பநிலை **${temp}°C** ஆகவும் உள்ளது (உணர்வு ${feels}°C).\n\n${tip}`;
     }
     if (language === "తెలుగు") {
-      return `ప్రస్తుతం **${loc}** లో వాతావరణం **${condTr}** గా ఉంది మరియు ఉష్ணోగ్రత **${temp}°C** (అనిపించేది ${feels}°C). తేమ **${hum}%**, గాలి వేగం **${wind} km/h**.\n\n${tip}`;
+      return `🌡️ ప్రస్తుతం **${loc}** లో వాతావరణం **${condTr}** గా ఉంది మరియు ఉష్ణోగ్రత **${temp}°C** (అనిపించేది ${feels}°C).\n\n${tip}`;
     }
     if (language === "मराठी") {
-      return `**${loc}** मध्ये सध्या हवामान **${condTr}** असून तापमान **${temp}°C** आहे (जाणवणारे ${feels}°C). आर्द्रता **${hum}%** आणि वाऱ्याचा वेग **${wind} km/h** आहे.\n\n${tip}`;
+      return `🌡️ **${loc}** मध्ये सध्या हवामान **${condTr}** असून तापमान **${temp}°C** आहे (जाणवणारे ${feels}°C).\n\n${tip}`;
     }
     if (language === "বাংলা") {
-      return `**${loc}**-তে এখন আবহাওয়া **${condTr}** এবং তাপমাত্রা **${temp}°C** (অনুভূত হচ্ছে ${feels}°C)। আর্দ্রতা প্রায় **${hum}%** এবং বাতাসের গতি **${wind} km/h**।\n\n${tip}`;
+      return `🌡️ **${loc}**-তে এখন আবহাওয়া **${condTr}** এবং তাপমাত্রা **${temp}°C** (অনুভূত হচ্ছে ${feels}°C)।\n\n${tip}`;
     }
-    return `Currently in **${loc}**, the weather is **${cond}** and temperature is **${temp}°C** (feels like ${feels}°C). Humidity is around **${hum}%** with winds at **${wind} km/h**.\n\n${tip}`;
+    return `🌡️ Currently in **${loc}**, the weather is **${cond}** and temperature is **${temp}°C** (feels like ${feels}°C).\n\n${tip}`;
   }
 
-  // 4. Tomorrow Forecast Pattern match
-  const tomMatch = text.match(/(?:कल|ನಾಳೆ|Tomorrow|நாளை|రేపు|उद्या|আগামীকাল).*?\*\*([^*]+)\*\*.*?(\d+(?:\.\d+)?)\s*°C.*?(\d+(?:\.\d+)?)\s*°C.*?(\d+)\s*%/is);
+  // 6. Tomorrow Forecast Pattern match
+  const tomMatch = text.match(/(?:कल|ನಾಳೆ|Tomorrow|நாளை|రేపు|उद्या|আগামীকাল).*?\*\*([^*]+)\*\*.*?(\d+(?:\.\d+)?)\s*°C/is);
   if (tomMatch) {
-    const loc = tomMatch[1];
-    const max = tomMatch[2];
-    const min = tomMatch[3];
-    const rain = tomMatch[4];
+    const loc = tomMatch[1].replace(/[^\w\s\u0900-\u0DFF]/g, "").trim();
+    const max = tomMatch[2] || "28";
 
     if (language === "हिन्दी") {
-      return `कल **${loc}** में अधिकतम तापमान **${max}°C** और न्यूनतम **${min}°C** रहने का अनुमान है, जिसमें बारिश की संभावना **${rain}%** रहेगी।`;
+      return `🌧️ कल **${loc}** में मौसम सुहावना रहेगा और तापमान अधिकतम **${max}°C** के आसपास रहने का अनुमान है।`;
     }
     if (language === "ಕನ್ನಡ") {
-      return `ನಾಳೆ **${loc}** ನಲ್ಲಿ ಗರಿಷ್ಠ ತಾಪಮಾನ **${max}°C** ಮತ್ತು ಕನಿಷ್ಠ **${min}°C** ಇರಲಿದ್ದು, ಮಳೆಯ ಸಾಧ್ಯತೆ ಸುಮಾರು **${rain}%** ಇರಲಿದೆ.`;
+      return `🌧️ ನಾಳೆ **${loc}** ನಲ್ಲಿ ಹವಾಮಾನ ಆಹ್ಲಾದಕರವಾಗಿದ್ದು, ಗರಿಷ್ಠ ತಾಪಮಾನ **${max}°C** ಇರಲಿದೆ.`;
     }
     if (language === "தமிழ்") {
-      return `நாளை **${loc}**-ல் அதிகபட்ச வெப்பநிலை **${max}°C** மற்றும் குறைந்தபட்சம் **${min}°C** இருக்கும். மழை வாய்ப்பு **${rain}%**.`;
+      return `🌧️ நாளை **${loc}**-ல் அதிகபட்ச வெப்பநிலை சுமார் **${max}°C** ஆக இருக்கும்.`;
     }
     if (language === "తెలుగు") {
-      return `రేపు **${loc}** లో గరిష్ట ఉష్ணోగ్రత **${max}°C** మరియు కనిష్ట ఉష్ణోగ్రత **${min}°C**, వర్షం అవకాశం **${rain}%**.`;
+      return `🌧️ రేపు **${loc}** లో గరిష్ట ఉష్ణోగ్రత సుమారు **${max}°C** గా నమోదవుతుంది.`;
     }
     if (language === "मराठी") {
-      return `उद्या **${loc}** मध्ये कमाल तापमान **${max}°C** व किमान **${min}°C** राहण्याचा अंदाज असून पावसाची शक्यता **${rain}%** असेल.`;
+      return `🌧️ उद्या **${loc}** मध्ये कमाल तापमान सुमारे **${max}°C** राहण्याचा अंदाज आहे.`;
     }
     if (language === "বাংলা") {
-      return `আগামীকাল **${loc}**-তে সর্বোচ্চ তাপমাত্রা **${max}°C** এবং সর্বনিম্ন **${min}°C**, বৃষ্টির সম্ভাবনা **${rain}%**।`;
+      return `🌧️ আগামীকাল **${loc}**-তে সর্বোচ্চ তাপমাত্রা প্রায় **${max}°C** থাকবে।`;
     }
-    return `Tomorrow in **${loc}**, expect a high of **${max}°C** and a low of **${min}°C** with rain probability around **${rain}%**.`;
+    return `🌧️ Tomorrow in **${loc}**, expect pleasant weather with a high around **${max}°C**.`;
   }
 
   return text;
@@ -4119,6 +4270,12 @@ export function translateChatHistory(messages, targetLanguage = "English") {
         ...msg,
         isWelcome: true,
         text: getChatWelcomeMessage(targetLanguage),
+      };
+    }
+    if (msg.role === "user") {
+      return {
+        ...msg,
+        text: translateUserQuestion(msg.text, targetLanguage),
       };
     }
     if (msg.role === "assistant") {

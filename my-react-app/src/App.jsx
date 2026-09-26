@@ -11,8 +11,15 @@ import SettingsPage from "./components/SettingsPage";
 import AboutPage from "./components/AboutPage";
 import PastWeatherPage from "./components/PastWeatherPage";
 import HourlyProgressionGraph from "./components/HourlyProgressionGraph";
+import ErrorBoundary from "./components/ErrorBoundary";
 
-const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8000" : "");
+const API_BASE = import.meta.env.VITE_API_BASE || (
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+  window.location.port !== "8000"
+    ? `http://${window.location.hostname}:8000`
+    : ""
+);
 
 import {
   TRANSLATIONS,
@@ -29,6 +36,8 @@ import {
   getChatWelcomeMessage,
   translateChatMessage,
   translateChatHistory,
+  translateUserQuestion,
+  getLocalizedQuestion,
   translateInsightTitle,
   translateInsightContent,
   translateScientificEyebrow,
@@ -610,13 +619,15 @@ export default function App() {
     setSearchInput("");
   };
 
-  // Chat message submission (text vs voice distinction)
-  const handleSendChat = async (userMsgText = chatInput, isVoice = false) => {
+  // Chat message submission (text vs voice distinction with multilingual support)
+  const handleSendChat = async (userMsgText = chatInput, isVoice = false, overrideLang = null) => {
     if (!currentUser) {
       setShowAuthModal(true);
       return;
     }
     if (!userMsgText.trim() || chatLoading) return;
+
+    const activeLanguage = overrideLang || language;
 
     // When typed in chat, cancel any voice speech so responses remain strictly text-only
     if (!isVoice && "speechSynthesis" in window) {
@@ -624,7 +635,9 @@ export default function App() {
       setIsSpeaking(false);
     }
 
-    const userText = userMsgText.trim();
+    const rawUserText = userMsgText.trim();
+    // For voice commands, preserve the user's spoken words directly. For typed text, localize standard queries if needed.
+    const userText = (!isVoice && activeLanguage !== "English") ? translateUserQuestion(rawUserText, activeLanguage) : rawUserText;
     setChatInput("");
     const newHistory = [
       ...chatMessages,
@@ -645,7 +658,7 @@ export default function App() {
         body: JSON.stringify({
           message: userText,
           city: city,
-          language: language,
+          language: activeLanguage,
           session_id: currentSessionId,
           is_voice: isVoice,
         }),
@@ -670,9 +683,9 @@ export default function App() {
         },
       ]);
 
-      // Automatic Conversation Mode: ONLY speak out loud when asked through microphone!
+      // Automatic Conversation Mode: Speak out loud in the matching preferred/detected language!
       if (isVoice) {
-        speakText(botReply);
+        speakText(botReply, data.language || activeLanguage);
       }
 
       // If location changed in query, sync it
@@ -700,8 +713,8 @@ export default function App() {
     setShowVoiceModal(true);
   };
 
-  // Text-To-Speech audio readout for Voice Conversation Mode
-  const speakText = (text) => {
+  // Text-To-Speech audio readout for Voice Conversation Mode matching spoken language
+  const speakText = (text, langCode = language) => {
     if (!("speechSynthesis" in window)) {
       alert("Text-to-speech is not supported in this browser.");
       return;
@@ -719,9 +732,22 @@ export default function App() {
       .trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanSpeech);
-    utterance.lang = LANG_CODE_MAP[language] || "en-IN";
+    const bcpCode = LANG_CODE_MAP[langCode] || "en-IN";
+    utterance.lang = bcpCode;
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
+
+    // Try finding matching synthesizer voice for the target language
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        const langPrefix = bcpCode.split("-")[0];
+        const match = voices.find(
+          (v) => v.lang.toLowerCase() === bcpCode.toLowerCase() || v.lang.toLowerCase().startsWith(langPrefix)
+        );
+        if (match) utterance.voice = match;
+      }
+    } catch (e) {}
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -1259,7 +1285,7 @@ export default function App() {
                       return;
                     }
                     setActivePage("chat");
-                    handleSendChat(`What should I wear tomorrow in ${city}?`);
+                    handleSendChat(getLocalizedQuestion("outfit", city, language));
                   }}
                 >
                   {t.suggestionTomorrow || "✨ Outfit for tomorrow"}
@@ -1271,7 +1297,7 @@ export default function App() {
                       return;
                     }
                     setActivePage("chat");
-                    handleSendChat(`Will it rain tomorrow in ${city}?`);
+                    handleSendChat(getLocalizedQuestion("rain", city, language));
                   }}
                 >
                   {t.suggestionRain || "🌧 Will it rain tomorrow?"}
@@ -1283,7 +1309,7 @@ export default function App() {
                       return;
                     }
                     setActivePage("chat");
-                    handleSendChat(`Can I spray pesticides in ${city} tomorrow?`);
+                    handleSendChat(getLocalizedQuestion("spray", city, language));
                   }}
                 >
                   {t.suggestionFarming || "🌾 Farming & spray advice"}
@@ -1598,21 +1624,26 @@ export default function App() {
         {/* VIEW: WEATHER MAP & GIS METEOROLOGICAL RADAR */}
         {/* ==================================================== */}
         {activePage === "weathermap" && (
-          <WeatherMapPage
-            apiBase={API_BASE}
-            language={language}
-            isSirenActive={isSirenActive}
-            onTriggerDisasterAlert={(alerts, locName) => checkAndTriggerDisaster(alerts, locName, true)}
-            onStopSiren={stopEmergencySiren}
-            onPlaySiren={() => playEmergencySiren(true)}
-            onOpenInChat={(msg) => {
-              setActivePage("chat");
-              handleSendChat(msg);
-            }}
-            onLocationSelect={(lat, lon) => {
-              fetchAllData(city, simulatedDisaster, lat, lon);
-            }}
-          />
+          <ErrorBoundary
+            title="Weather Map & Meteorological GIS Radar"
+            message="An unexpected rendering issue occurred in the interactive map view. You can reload or return to the main dashboard."
+          >
+            <WeatherMapPage
+              apiBase={API_BASE}
+              language={language}
+              isSirenActive={isSirenActive}
+              onTriggerDisasterAlert={(alerts, locName) => checkAndTriggerDisaster(alerts, locName, true)}
+              onStopSiren={stopEmergencySiren}
+              onPlaySiren={() => playEmergencySiren(true)}
+              onOpenInChat={(msg) => {
+                setActivePage("chat");
+                handleSendChat(msg);
+              }}
+              onLocationSelect={(lat, lon) => {
+                fetchAllData(city, simulatedDisaster, lat, lon);
+              }}
+            />
+          </ErrorBoundary>
         )}
 
         {/* ==================================================== */}
@@ -1846,22 +1877,22 @@ export default function App() {
                 )}
 
                 <div className="chat-suggestions-row" style={{ display: "flex", gap: "8px", flexWrap: "wrap", overflowX: "auto" }}>
-                  <button onClick={() => handleSendChat(`Can I spray pesticides in ${city} tomorrow?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("spray", city, language), false)}>
                     {t.pesticideAdviceChip || "🌾 Pesticide Spray Advice"}
                   </button>
-                  <button onClick={() => handleSendChat(`Are there any active cyclone, flood, or heatwave alerts?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("alerts", city, language), false)}>
                     {t.disasterAlertsChip || "🚨 Disaster Alerts & Warnings"}
                   </button>
-                  <button onClick={() => handleSendChat(`What is the aviation METAR briefing for VOBL?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("aviation", city, language), false)}>
                     {t.aviationBriefingChip || "✈️ Aviation Briefing (VOBL)"}
                   </button>
-                  <button onClick={() => handleSendChat(`What are the climate trends and temperature anomalies in ${city}?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("climate", city, language), false)}>
                     {t.climateTrendsChip || "📊 Climate Trends & Anomalies"}
                   </button>
-                  <button onClick={() => handleSendChat(`What should I wear tomorrow in ${city}?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("outfit", city, language), false)}>
                     {t.outfitAdviceChip || "👔 Outfit & Travel Advice"}
                   </button>
-                  <button onClick={() => handleSendChat(`What is the weather in ${city}?`, false)}>
+                  <button onClick={() => handleSendChat(getLocalizedQuestion("weather", city, language), false)}>
                     {t.liveWeatherChip || "🌡️ Live Weather"}
                   </button>
                 </div>
@@ -3285,12 +3316,26 @@ export default function App() {
         {/* 🎙️ INTERACTIVE VOICE RECORDING MIC BOX OVERLAY */}
         <VoiceModal
           isOpen={showVoiceModal}
-          onClose={() => setShowVoiceModal(false)}
-          onSend={(transcriptText) => {
+          onClose={(reason) => {
+            setShowVoiceModal(false);
+            if (reason === "timeout") {
+              setLocationToast({
+                type: "info",
+                message: "⏱️ No voice detected. Voice mode exited. Click the mic to try again.",
+              });
+              setTimeout(() => setLocationToast(null), 4000);
+            }
+          }}
+          onSend={(transcriptText, chosenLang) => {
+            const finalLang = chosenLang || language;
+            if (chosenLang && chosenLang !== language) {
+              setLanguage(chosenLang);
+            }
             setActivePage("chat");
-            handleSendChat(transcriptText, true);
+            handleSendChat(transcriptText, true, finalLang);
           }}
           language={language}
+          onLanguageChange={(newLang) => setLanguage(newLang)}
           city={weather?.city || city}
           t={t}
         />
